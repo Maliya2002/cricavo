@@ -10,9 +10,9 @@ Validation: 15 scoring-engine tests and JavaScript syntax checks passed. Browser
 
 ## Source control
 
-Local Git repository exists. GitHub upload is authorized by the user; default to a private repository named `cricavo` under the verified user's account. No GitHub remote or successful push has been established yet. Never claim that the private Sites source repository is the user's GitHub repository.
+Local Git repository exists. GitHub upload is authorized by the user; default to a private repository named `cricavo` under the verified user's account. Source is now pushed to the private repository https://github.com/Maliya2002/cricavo on main; origin tracks that repository. Never claim that the private Sites source repository is the user's GitHub repository.
 
-GitHub plugin reports installed, but account/repository calls returned Unknown tool in the current session. GitHub CLI is absent. Browser fallback reports local browser use disabled in Work settings. Resolve one authenticated GitHub access path before creating or pushing the repository. Do not ask for tokens in chat or put credentials in source files.
+GitHub connector access recovered and verified Maliya2002. Repository creation used the existing Git Credential Manager sign-in without exposing or persisting credentials. The connector lacks repository creation. GitHub CLI remains absent. Do not ask for tokens in chat or put credentials in source files.
 
 ## Hosting
 
@@ -20,7 +20,7 @@ Retain the existing project ID in `.openai/hosting.json`. Registration previousl
 
 ## Next work
 
-1. Restore GitHub access, verify account, check for an existing Cricavo repository, create a private repository if absent, upload and verify the remote commit.
+1. GitHub repository creation and initial push completed; continue checking CI on subsequent changes.
 2. Reconcile Sites access, complete preview packaging and publication, then inspect the final responsive build.
 3. Implement remaining Release 1 capabilities in the approved requirements: server accounts/organizations, authenticated offline sync, public score sharing, tournaments, player identities and advanced match workflows.
 
