@@ -1,12 +1,14 @@
-# Cricavo — device scoring build 0.1
+# Cricavo — scoring and account foundation 0.2
 
 First implementation milestone following the approved wireframes. This is **not the completed enterprise Release 1**.
 
 ## Run
 
-Requires Node 22+. No npm dependencies.
+Requires Node 22+. Dependencies are locked in package-lock.json.
 
 ```sh
+npm ci
+npm run build
 npm start
 npm test
 npm run check
@@ -15,6 +17,9 @@ npm run check
 Open http://127.0.0.1:4173. Static deploy directory: `dist`.
 
 ## Implemented
+
+- Supabase-ready Google PKCE, email/phone OTP and account screens; disabled until project/provider configuration is supplied.
+- Organization SQL migration with tenant isolation, atomic owner creation and executable access-policy tests. See `docs/supabase-setup.md` for deployment and verification steps.
 
 - Responsive Sinhala/English dashboard, match setup, scoring desk, scorecard and match history.
 - Light/dark themes; installable web manifest and service worker shell cache.
@@ -28,7 +33,7 @@ Open http://127.0.0.1:4173. Static deploy directory: `dist`.
 
 - Data belongs to this browser. Clearing browser/site data loses matches; export backups. This is not cloud synchronization, multi-device ownership or public live sharing.
 - Offline shell requires an initial successful online visit and browser cache support. Real iPhone/Android installation and suspension testing remains necessary.
-- Google/email/phone authentication, organization access, tournament operations, stable player IDs/claims, public live links, full-squad selection and career statistics are not implemented yet. Their screens explicitly state this.
+- Google/email/phone authentication and organization access have implementation foundations but are not connected to a provisioned cloud project or verified with live providers yet. Tournament operations, stable player IDs/claims, public live links, full-squad selection and career statistics are not implemented yet.
 - Not a full Laws-of-Cricket engine: no overthrows, retired batters, penalty awards, interruptions/revised targets, super overs, multi-innings formats, scorer handover or historical correction editor. Don't use this pilot for official scoring without validating the applicable playing conditions.
 - Run-out entry explicitly records replacement end before the end-of-over swap. Unsupported delivery combinations are rejected.
 - Rates use configured balls per over. No tournament NRR is calculated.

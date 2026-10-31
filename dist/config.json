@@ -1,0 +1,5 @@
+{
+  "supabaseUrl": "",
+  "supabasePublishableKey": "",
+  "providers": { "google": false, "email": false, "phone": false }
+}

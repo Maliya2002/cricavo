@@ -4,6 +4,10 @@ Updated: 1 November 2026 (Asia/Colombo).
 
 ## Delivered locally
 
+Milestone 0.2 adds Supabase auth adapters and account UI, an organization migration and tests. The project is not provisioned: the user clarified they need a new Supabase project. The integration is installed but project/organization calls return Unknown tool. No cloud migration, provider enablement, email or SMS delivery has taken place. See `docs/supabase-setup.md`.
+
+Current validation: 24 tests pass (15 scoring, 8 auth and one PostgreSQL policy suite). Browser bundle build and syntax checks pass. Browser QA and live-provider tests for 0.2 remain pending.
+
 Device-scoring milestone 0.1, not the completed enterprise Release 1. See README for implemented features and limits. The approved product requirements are in `docs/requirements.md`.
 
 Validation: 15 scoring-engine tests and JavaScript syntax checks passed. Browser QA verified quick setup, boundary/wide scoring, persistence after reload, second-innings transition and a successful chase result. Real-device iOS/Android and full offline lifecycle testing remain outstanding. Mobile control ordering was adjusted after that browser session and needs visual reinspection.
