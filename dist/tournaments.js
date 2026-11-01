@@ -14,7 +14,50 @@ export function roundRobin(teams) {
   return fixtures;
 }
 
-export function createTournament({ name, teams, ballType, overs, ballsPerOver, players }, uuid = () => crypto.randomUUID()) {
+export function knockoutBracket(teams, uuid = () => crypto.randomUUID()) {
+  const size = 2 ** Math.ceil(Math.log2(teams.length));
+  const seeds = [...teams, ...Array(size - teams.length).fill(null)];
+  const fixtures = [];
+  let previous = [];
+  for (let i=0; i<size/2; i++) {
+    const fixture = { id: uuid(), round: 1, teamA: seeds[i], teamB: seeds[size-1-i] };
+    fixtures.push(fixture); previous.push(fixture);
+  }
+  let round = 2;
+  while (previous.length > 1) {
+    const next = [];
+    for (let i=0; i<previous.length; i+=2) {
+      const fixture = { id: uuid(), round, fromA: previous[i].id, fromB: previous[i+1].id };
+      fixtures.push(fixture); next.push(fixture);
+    }
+    previous = next; round++;
+  }
+  return fixtures;
+}
+
+export function resolvedFixtures(tournament, matches) {
+  if (tournament.format !== 'knockout') return tournament.fixtures.map(f => ({...f, ready:true}));
+  const results = new Map(), byId = new Map(matches.map(m => [m.id,m]));
+  for (const fixture of tournament.fixtures) {
+    const sourceA = fixture.fromA ? results.get(fixture.fromA) : null;
+    const sourceB = fixture.fromB ? results.get(fixture.fromB) : null;
+    const teamA = fixture.fromA ? sourceA?.winner : fixture.teamA;
+    const teamB = fixture.fromB ? sourceB?.winner : fixture.teamB;
+    const waiting = (!!fixture.fromA && !sourceA?.winner) || (!!fixture.fromB && !sourceB?.winner);
+    const bye = !waiting && (!teamA || !teamB);
+    const match = byId.get(fixture.id);
+    const conflict = !!match && (waiting || match.settings.teamA !== teamA || match.settings.teamB !== teamB);
+    let winner = bye ? (teamA || teamB) : null, tied = false;
+    if (match && !conflict && !bye) {
+      const state = replay(match);
+      if (state.finished) { tied = state.result.by === 'tie'; if (!tied) winner = state.result.winner === 'A' ? teamA : teamB; }
+    }
+    results.set(fixture.id, {...fixture,teamA,teamB,waiting,bye,conflict,tied,winner,ready:!waiting&&!bye&&!conflict});
+  }
+  return [...results.values()];
+}
+
+export function createTournament({ name, teams, ballType, overs, ballsPerOver, players, format = 'league' }, uuid = () => crypto.randomUUID()) {
   name = String(name || '').trim();
   if (!name || name.length > 80) throw Error('Tournament name must be 1–80 characters');
   teams = teams.map(n => n.trim()).filter(Boolean);
@@ -24,7 +67,8 @@ export function createTournament({ name, teams, ballType, overs, ballsPerOver, p
     if (!Number.isInteger(+value) || +value < min || +value > max) throw Error(`${label}: enter ${min}–${max}`);
   }
   if (!['softball','hardball'].includes(ballType)) throw Error('Choose a ball type');
-  return { id: uuid(), schemaVersion: 1, name, teams, format: 'league', ballType, overs: +overs, ballsPerOver: +ballsPerOver, players: +players, createdAt: new Date().toISOString(), fixtures: roundRobin(teams).map(f => ({ ...f, id: uuid() })) };
+  if (!['league','knockout'].includes(format)) throw Error('Choose league or knockout');
+  return { id: uuid(), schemaVersion: 1, name, teams, format, ballType, overs: +overs, ballsPerOver: +ballsPerOver, players: +players, createdAt: new Date().toISOString(), fixtures: format === 'knockout' ? knockoutBracket(teams,uuid) : roundRobin(teams).map(f => ({ ...f, id: uuid() })) };
 }
 
 export function standings(tournament, matches) {

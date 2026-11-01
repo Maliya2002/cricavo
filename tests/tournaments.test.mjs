@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roundRobin,createTournament,standings} from '../dist/tournaments.js';
+import {roundRobin,createTournament,standings,resolvedFixtures} from '../dist/tournaments.js';
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
@@ -39,4 +39,35 @@ test('points use finished fixtures only and recompute when a result is undone',(
   rows=standings(league,[undo(win)]);assert(rows.every(r=>r.played===0));
   rows=standings(league,[completed(f,4)]);assert.equal(rows.filter(r=>r.points===1&&r.tied===1).length,2);
   rows=standings(league,[{...win,id:crypto.randomUUID()}]);assert(rows.every(r=>r.played===0));
+});
+
+test('knockout completes with exactly n-1 played matches for every supported team count',()=>{
+  for(let n=2;n<=16;n++) {
+    const tournament=createTournament({...values,format:'knockout',teams:Array.from({length:n},(_,i)=>'Team '+i)}),matches=[];
+    const size=2**Math.ceil(Math.log2(n));
+    assert.equal(tournament.fixtures.length,size-1);
+    assert.equal(resolvedFixtures(tournament,[]).filter(f=>f.bye).length,size-n);
+    for(const raw of tournament.fixtures) {
+      const fixture=resolvedFixtures(tournament,matches).find(f=>f.id===raw.id);
+      if(fixture.bye) continue;
+      assert(fixture.ready);assert(fixture.teamA);assert(fixture.teamB);
+      matches.push(completed(fixture,6));
+    }
+    assert.equal(matches.length,n-1);
+    assert(tournament.teams.includes(resolvedFixtures(tournament,matches).at(-1).winner));
+  }
+});
+
+test('tied and undone results never silently advance a knockout team',()=>{
+  const tournament=createTournament({...values,format:'knockout',teams:['A','B','C','D']});
+  let fixtures=resolvedFixtures(tournament,[]);
+  const tied=completed(fixtures[0],4),other=completed(fixtures[1],6);
+  fixtures=resolvedFixtures(tournament,[tied,other]);
+  assert(fixtures[0].tied);assert(fixtures.at(-1).waiting);assert(!fixtures.at(-1).ready);
+  const first=completed(fixtures[0],6);
+  fixtures=resolvedFixtures(tournament,[first,other]);
+  assert(fixtures.at(-1).ready);
+  const final=completed(fixtures.at(-1),6);
+  fixtures=resolvedFixtures(tournament,[undo(first),other,final]);
+  assert(fixtures.at(-1).conflict);assert(!fixtures.at(-1).winner);assert(!fixtures.at(-1).ready);
 });
