@@ -11,7 +11,7 @@ export function tournamentPlayerStats(tournament,matches) {
     if(!match||fixture.conflict||fixture.waiting||fixture.bye)continue;
     const state=replay(match);if(!state.finished)continue;completedMatches++;
     const figures=fieldingFigures(state,match.settings);unattributed+=figures.unattributed;
-    for(const f of figures.rows){const id=key(f.team,f.name),row=fielders.get(id)||{name:f.name,team:f.team,catches:0,stumpings:0,runOuts:0,assists:0,points:0};for(const stat of ['catches','stumpings','runOuts','assists','points'])row[stat]+=f[stat];fielders.set(id,row);}
+    for(const f of figures.rows){const id=key(f.team,f.name),row=fielders.get(id)||{name:f.name,team:f.team,catches:0,stumpings:0,runOuts:0,assists:0,droppedCatches:0,runsSaved:0,runsMissed:0,points:0};for(const stat of ['catches','stumpings','runOuts','assists','droppedCatches','runsSaved','runsMissed','points'])row[stat]+=f[stat];fielders.set(id,row);}
     for(const innings of state.innings){
       const team=match.settings['team'+innings.team],opponent=match.settings[innings.team==='A'?'teamB':'teamA'];
       for(const batter of Object.values(innings.batters)){

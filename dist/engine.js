@@ -18,6 +18,15 @@ const swap=i=>{[i.striker,i.nonStriker]=[i.nonStriker,i.striker]};
 export function replay(match){
  const s=validateSettings(match.settings);const state={innings:[],current:null,finished:false,result:null};
  for(const e of match.events){
+  if(e.type==='fielding'){
+   const inning=state.innings[integer(e.innings,0,1,'fielding innings')];
+   if(!inning)throw Error('Fielding note requires a started innings');
+   integer(e.delivery,0,inning.deliveries.length-1,'fielding delivery');
+   if(!['droppedCatch','runsSaved','runsMissed'].includes(e.kind))throw Error('Invalid fielding note');
+   const fielder=name(e.fielder);
+   const runs=integer(e.runs,e.kind==='droppedCatch'?0:1,e.kind==='droppedCatch'?0:6,'fielding runs');
+   (inning.fieldingNotes??=[]).push({...e,fielder,runs});continue;
+  }
   if(state.finished)throw Error('Match is already complete');
   if(e.type==='start'){
    if(state.innings.length&&(!state.current.complete||state.innings.length>=2))throw Error('Cannot start this innings');

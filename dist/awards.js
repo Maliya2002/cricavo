@@ -20,7 +20,7 @@ export function matchAwards(match) {
     for(const bowler of Object.values(innings.bowlers))row(opponent,bowler.name).wickets+=bowler.wickets;
   }
   const fielding=fieldingFigures(state,match.settings);
-  for(const f of fielding.rows)row(f.team,f.name).fieldingPoints=f.points;
+  for(const f of fielding.rows)if(f.points)row(f.team,f.name).fieldingPoints=f.points;
   const rows=[...players.values()].map(p=>({...p,points:p.runs*AWARD_RULE.run+p.wickets*AWARD_RULE.wicket+(p.fieldingPoints||0)}));
   return {completed:true,players:rows,manOfMatch:leaders(rows,'points')};
 }
