@@ -1,11 +1,22 @@
 import { initializeCloud } from './auth.js';
 import { backupService } from './cloud-backups.js';
 import { listMatches, saveMatch } from './storage.js';
+import { createAutoBackup } from './auto-backup.js';
 
 export function createAccountUI({ modal, t, escape: esc, toast }) {
   let cloud = null, ready = false, failure = '', requestVersion = 0, visible = false, method = 'email';
+  let autoBackup = null;
   const initialization = initializeCloud().then(result => {
     cloud = result;
+    if (cloud) {
+      autoBackup = createAutoBackup({ client: cloud.client, getUser: () => cloud.session?.user.id,
+        listMatches, storage: localStorage, online: () => navigator.onLine,
+        onStatus: (state) => { const target = modal.querySelector('#auto-status'); if (target) target.textContent = state === 'saved' ? t('Saved to cloud', 'Cloud වෙත සුරැකුණා') : state === 'saving' ? t('Saving…', 'සුරකිමින්…') : t('Upload pending. Will retry online.', 'Upload ඉතිරියි. Online විට නැවත උත්සාහ කරයි.'); }
+      });
+      setInterval(() => autoBackup.flush(), 15000);
+      window.addEventListener('online', () => autoBackup.flush());
+      autoBackup.flush();
+    }
     if (cloud) cloud.auth.onChange((_event, session) => {
       cloud.session = session;
       // Avoid awaiting Supabase methods inside its synchronous auth callback.
@@ -52,7 +63,7 @@ export function createAccountUI({ modal, t, escape: esc, toast }) {
     try {
       const [local, saved] = await Promise.all([listMatches(), backupService(cloud.client).list()]);
       if (!visible || version !== requestVersion) return;
-      paint(`<h3>${t('Cloud match backups', 'Cloud තරග පිටපත්')}</h3><p class="muted">${t('Private to your account. Upload saves a snapshot; restore creates a new local match. This is not live sync. Latest 50 backups shown.', 'ඔබේ ගිණුමට පමණයි. Upload මඟින් මේ මොහොතේ පිටපතක් සුරකී. Restore නව local තරගයක් සාදයි. මෙය live sync නොවේ. අලුත්ම පිටපත් 50 පෙන්වයි.')}</p><h3>${t('On this device', 'මෙම උපාංගයේ')}</h3>${local.map(m => `<div class="notice">${esc(m.settings.teamA)} / ${esc(m.settings.teamB)} ${btn(t('Upload snapshot', 'පිටපත upload කරන්න'), 'upload:' + m.id)}</div>`).join('') || '<p>—</p>'}<h3>${t('Saved in cloud', 'Cloud හි සුරැකි')}</h3>${saved.map(b => `<div class="notice">${esc(new Date(b.created_at).toLocaleString())}<br><small>${esc(b.match_id)}</small>${btn(t('Restore as new match', 'නව තරගයක් ලෙස ලබාගන්න'), 'restore:' + b.id)}</div>`).join('') || '<p>—</p>'}<p id="account-error" class="form-error" role="alert"></p>${btn(t('Back to account', 'ගිණුම වෙත'), 'refresh')}`);
+      paint(`<h3>${t('Cloud match backups', 'Cloud තරග පිටපත්')}</h3><p class="muted">${t('Private to your account. Upload saves a snapshot; restore creates a new local match. This is not live sync. Latest 50 backups shown.', 'ඔබේ ගිණුමට පමණයි. Upload මඟින් මේ මොහොතේ පිටපතක් සුරකී. Restore නව local තරගයක් සාදයි. මෙය live sync නොවේ. අලුත්ම පිටපත් 50 පෙන්වයි.')}</p><p id="auto-status" role="status">${t('Auto backup runs every 15 seconds while open and signed in. Offline changes retry online. Restored copies need separate opt-in. Devices are not merged.', 'App එක විවෘතව login වී ඇති විට තත්පර 15කට වරක් auto backup වේ. Offline වෙනස්කම් online වූ විට යැවේ. Restore කළ පිටපතට වෙනම සක්‍රිය කරන්න. Devices අතර merge නොවේ.')}</p><h3>${t('On this device', 'මෙම උපාංගයේ')}</h3>${local.map(m => `<div class="notice">${esc(m.settings.teamA)} / ${esc(m.settings.teamB)} ${btn(t('Upload snapshot', 'පිටපත upload කරන්න'), 'upload:' + m.id)} ${btn(autoBackup.enabled(m.id) ? t('Stop auto backup', 'Auto backup නවත්වන්න') : t('Enable auto backup', 'Auto backup සක්‍රිය කරන්න'), 'auto:' + m.id)}</div>`).join('') || '<p>—</p>'}<h3>${t('Saved in cloud', 'Cloud හි සුරැකි')}</h3>${saved.map(b => `<div class="notice">${esc(new Date(b.created_at).toLocaleString())}<br><small>${esc(b.match_id)}</small>${btn(t('Restore as new match', 'නව තරගයක් ලෙස ලබාගන්න'), 'restore:' + b.id)}</div>`).join('') || '<p>—</p>'}<p id="account-error" class="form-error" role="alert"></p>${btn(t('Back to account', 'ගිණුම වෙත'), 'refresh')}`);
     } catch (error) {
       if (visible && version === requestVersion) paint(`<p class="form-error" role="alert">${esc(error.message)}</p>${btn(t('Retry backups', 'නැවත උත්සාහ කරන්න'), 'backups')}${btn(t('Back', 'ආපසු'), 'refresh')}`);
     }
@@ -76,6 +87,12 @@ export function createAccountUI({ modal, t, escape: esc, toast }) {
     if (action === 'change') { cloud.auth.clearPending(); show(); return; }
     run(async () => {
       if (action === 'backups') await showBackups();
+      if (action.startsWith('auto:')) {
+        const id = action.slice(5);
+        if (autoBackup.enabled(id)) autoBackup.disable(id); else autoBackup.enable(id);
+        await showBackups();
+        await autoBackup.flush();
+      }
       if (action.startsWith('upload:')) {
         const match = (await listMatches()).find(m => m.id === action.slice(7));
         if (!match) throw Error('Local match not found');
