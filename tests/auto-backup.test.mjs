@@ -25,3 +25,21 @@ test('failed uploads retry the same immutable ID; account switches do not upload
   assert.equal(f.calls[0].id,f.calls[1].id); await worker.flush(); assert.equal(f.calls.length,2);
   worker.disable(f.id); f.change(); await worker.flush(); assert.equal(f.calls.length,2);
 });
+
+test('one failed match does not block other backups or report all saved', async () => {
+  const f=fixture(), statuses=[];
+  const first=(await f.options.listMatches())[0];
+  const second={...first,id:crypto.randomUUID()};
+  f.options.listMatches=async()=>[first,second];
+  f.options.onStatus=(state)=>statuses.push(state);
+  f.options.client={from:()=>({insert:async row=>{f.calls.push(row);return {error:row.match_id===first.id?{code:'FAIL',message:'Try later'}:null};}})};
+  const worker=createAutoBackup(f.options);
+  worker.enable(first.id);worker.enable(second.id);
+  await worker.flush();
+  assert.equal(f.calls.length,2);
+  assert.equal(statuses.at(-1),'pending');
+  assert(!statuses.includes('saved'));
+  await worker.flush();
+  assert.equal(f.calls.length,3);
+  assert.equal(f.calls[2].match_id,first.id);
+});

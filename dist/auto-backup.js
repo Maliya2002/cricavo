@@ -16,13 +16,17 @@ export function createAutoBackup({ client, getUser, listMatches, storage, online
     enable(id) { const user = getUser(); if (!user) throw Error('Sign in first'); storage.setItem(key(user,id), JSON.stringify({ saved: null })); },
     disable(id) { const user = getUser(); if (user) storage.removeItem(key(user,id)); },
     async flush() {
-      if (busy || !online()) return;
+      if (busy) return;
+      if (!online()) { onStatus('offline'); return; }
       const user = getUser(); if (!user) return;
       busy = true;
       try {
+        let lastError = null, selected = 0;
         for (const match of await listMatches()) {
           if (getUser() !== user || !online()) break;
+          try {
           const state = read(user,match.id); if (!state) continue;
+          selected++;
           validateSnapshot(match);
           const id = await snapshotId(user,match);
           if (state.saved === id) continue;
@@ -31,9 +35,13 @@ export function createAutoBackup({ client, getUser, listMatches, storage, online
           const result = await client.from('cricavo_match_backups').insert({ id, owner_id: user, match_id: match.id, snapshot: match });
           if (result.error && result.error.code !== '23505') throw result.error;
           if (getUser() === user && read(user,match.id)) storage.setItem(key(user,match.id), JSON.stringify({ saved: id }));
-          onStatus('saved');
+          } catch (error) { lastError = error; }
         }
-      } catch (error) { onStatus('pending', error); }
+        if (getUser() !== user) return;
+        if (!online()) onStatus('offline');
+        else if (lastError) onStatus('pending', lastError);
+        else if (selected) onStatus('saved');
+      } catch (error) { if (getUser() === user) onStatus('pending', error); }
       finally { busy = false; }
     }
   };
