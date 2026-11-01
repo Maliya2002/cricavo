@@ -4,7 +4,7 @@ First implementation milestone following the approved wireframes. This is **not 
 
 ## Run
 
-Requires Node 22+. Dependencies are locked in package-lock.json.
+Requires Node 22.22.2+, 24.15.0+ (recommended), or 26+; the DOM test dependency requires these supported releases. Dependencies are locked in package-lock.json.
 
 ```sh
 npm ci
