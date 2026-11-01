@@ -48,6 +48,9 @@ export function validateTournamentBackup(bundle) {
     if(fixture.stage==='league')requireValue(tournament.teams.includes(fixture.teamA)&&tournament.teams.includes(fixture.teamB)&&(!fixture.group||[fixture.teamA,fixture.teamB].every(team=>groupMap.get(fixture.group).teams.includes(team))),'Invalid league participants');
     fixtureMap.set(fixture.id,fixture);
   }
+  requireValue(tournament.awardScope===undefined||['all','finalists'].includes(tournament.awardScope),'Invalid award eligibility');
+  requireValue(!tournament.awardFinalId||fixtureMap.has(tournament.awardFinalId),'Unknown awards final fixture');
+  requireValue(tournament.awardScope!=='finalists'||fixtureMap.has(tournament.awardFinalId),'Missing awards final fixture');
   requireValue(Array.isArray(bundle.matches),'Missing matches');
   const matchIds=new Set();
   for(const match of bundle.matches){
@@ -70,6 +73,7 @@ export function tournamentBackup(tournament,matches) {
 export function restoreTournamentCopy(raw,uuid=()=>crypto.randomUUID()) {
   const bundle=structuredClone(validateTournamentBackup(raw)),tournament=bundle.tournament;
   const newId=uuid(),ids=new Map(tournament.fixtures.map(f=>[f.id,uuid()]));
+  if(tournament.awardFinalId)tournament.awardFinalId=ids.get(tournament.awardFinalId);
   for(const fixture of tournament.fixtures){
     fixture.id=ids.get(fixture.id);
     for(const side of ['A','B']){

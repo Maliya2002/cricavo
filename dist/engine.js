@@ -44,6 +44,11 @@ export function replay(match){
   if(e.kind==='wide'&&boundary&&runs!==4)throw Error('A wide boundary is four plus the penalty');
   if(['bye','legBye'].includes(e.kind)&&runs===0)throw Error('Enter the extra runs');
   if(e.kind==='noBall'&&!['bat','bye','legBye'].includes(e.credit))throw Error('Choose who receives the additional runs');
+  if(e.fielder!==undefined||e.assist!==undefined){
+   if(!['caught','stumped','runOut'].includes(e.wicket))throw Error('Fielders apply only to catches, stumpings and run outs');
+   if(e.fielder!==undefined)name(e.fielder);
+   if(e.assist!==undefined){name(e.assist);if(e.wicket!=='runOut'||!e.fielder)throw Error('Run-out assist requires a primary fielder');if(e.assist.trim().toLowerCase()===e.fielder.trim().toLowerCase())throw Error('Fielder and assistant must be different players');}
+  }
   if(e.wicket){
    if(!['bowled','caught','lbw','stumped','hitWicket','runOut'].includes(e.wicket))throw Error('Unsupported dismissal');
    if((e.kind==='noBall'||i.freeHit)&&e.wicket!=='runOut')throw Error('Only run out is supported on a no-ball or free hit');

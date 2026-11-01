@@ -174,6 +174,7 @@ export function updateDraw(tournament,matches,input,uuid=()=>crypto.randomUUID()
   if(input.id&&matches.some(m=>m.id===input.id))throw Error('A match already set up cannot be edited or removed');
   const depends=(f,id)=>f.fromA===id||f.fromB===id||[f.sourceA,f.sourceB].some(s=>s?.fixture===id);
   if(input.remove) {
+    if(tournament.awardFinalId===input.id)throw Error('Choose another awards final or all-team eligibility before removing this fixture');
     if(fixtures.some(f=>depends(f,input.id)))throw Error('Remove dependent fixtures first');
     fixtures.splice(index,1);
   } else {

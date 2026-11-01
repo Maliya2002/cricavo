@@ -1,3 +1,4 @@
+import { updateAwardSelection } from './awards.js';
 import { bindFixtureFilters } from './fixture-filters.js';
 import { createTournament, saveTournament, recordAdvancement, updateDraw, updateFixtureSchedule } from './tournaments.js';
 import { drawUI } from './draw-ui.js';
@@ -123,7 +124,19 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
       };
     });
   }
+  function bindAwardSettings() {
+    document.querySelectorAll('[data-award-settings]').forEach(form=>{
+      const tournament=getTournaments().find(v=>v.id===form.dataset.awardSettings);let saving=false;
+      const update=()=>{form.elements.finalId.disabled=form.elements.scope.value==='all';form.elements.finalId.required=!form.elements.finalId.disabled;};form.elements.scope.onchange=update;update();
+      form.onsubmit=async event=>{
+        event.preventDefault();if(saving)return;saving=true;const button=form.querySelector('button');button.disabled=true;
+        try{const updated=updateAwardSelection(tournament,Object.fromEntries(new FormData(form)));await saveTournament(updated,tournament.revision||0);await refresh();redraw();toast(t('Award rule saved','සම්මාන නීතිය සුරැකුණා'));}
+        catch(error){form.querySelector('.form-error').textContent=error.message;}finally{saving=false;button.disabled=false;}
+      };
+    });
+  }
   function bind() {
+    bindAwardSettings();
     const filterForm=document.querySelector('[data-fixture-filters]');
     if(filterForm){const id=filterForm.dataset.fixtureFilters;if(!filterState.has(id))filterState.set(id,{});bindFixtureFilters(filterForm.parentElement,filterState.get(id));}
     bindSchedules();
