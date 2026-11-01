@@ -93,7 +93,7 @@ export function createTournament({ name, teams, ballType, overs, ballsPerOver, p
 }
 
 export function standings(tournament, matches) {
-  const rows = new Map(tournament.teams.map(name => [name, { name, played: 0, won: 0, lost: 0, tied: 0, points: 0 }]));
+  const rows = new Map(tournament.teams.map(name => [name, { name, played: 0, won: 0, lost: 0, tied: 0, points: 0, runsFor:0, runsAgainst:0, oversFor:0, oversAgainst:0, nrr:null }]));
   const byId = new Map(matches.map(m => [m.id, m]));
   for (const fixture of tournament.fixtures) {
     const match = byId.get(fixture.id);
@@ -104,8 +104,25 @@ export function standings(tournament, matches) {
     a.played++; b.played++;
     if (state.result.by === 'tie') { a.tied++; b.tied++; a.points++; b.points++; }
     else { const winner = state.result.winner === 'A' ? a : b, loser = winner === a ? b : a; winner.won++; winner.points += 2; loser.lost++; }
+    for (const innings of state.innings) {
+      const batting = innings.team === 'A' ? a : b, bowling = batting === a ? b : a;
+      // All-out uses the entitled quota. Otherwise use actual balls, never
+      // cricket's display notation (e.g. 4.2 is not 4.2 decimal overs).
+      const overs = innings.wickets >= match.settings.players - 1 ? match.settings.overs : innings.balls / match.settings.ballsPerOver;
+      batting.runsFor += innings.total; batting.oversFor += overs;
+      bowling.runsAgainst += innings.total; bowling.oversAgainst += overs;
+    }
   }
-  return [...rows.values()].sort((a,b) => b.points - a.points || a.name.localeCompare(b.name));
+  for (const row of rows.values()) {
+    if (row.oversFor > 0 && row.oversAgainst > 0) row.nrr = row.runsFor / row.oversFor - row.runsAgainst / row.oversAgainst;
+  }
+  return [...rows.values()].sort((a,b) => b.points - a.points || (a.nrr === null ? (b.nrr === null ? 0 : 1) : b.nrr === null ? -1 : b.nrr - a.nrr) || a.name.localeCompare(b.name));
+}
+
+export function formatNRR(value) {
+  if (value === null || !Number.isFinite(value)) return '—';
+  const rounded = Math.abs(value) < 0.0005 ? 0 : value;
+  return (rounded >= 0 ? '+' : '') + rounded.toFixed(3);
 }
 
 // Separate database avoids blocking the existing match store during upgrades.

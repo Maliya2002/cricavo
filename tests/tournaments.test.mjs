@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement} from '../dist/tournaments.js';
+import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement,formatNRR} from '../dist/tournaments.js';
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
@@ -89,4 +89,37 @@ test('recorded tie decisions advance without changing scores, and can be revoked
   assert.throws(()=>recordAdvancement(tournament,[match],{...input,winner:'Other team'}),/Choose/);
   assert.throws(()=>recordAdvancement(tournament,[match],{...input,reason:''}),/reason/);
   assert.throws(()=>recordAdvancement(tournament,[match],{...input,recordedBy:''}),/recorder/);
+});
+
+function allOutChase(f,{firstRuns=4,chaseRuns=6,wide=false}={}) {
+  const settings={...values,overs:2,ballsPerOver:5,players:2,teamA:f.teamA,teamB:f.teamB,widePenalty:1,noBallPenalty:1,battingFirst:'A'};
+  let m={id:f.id,settings,events:[],audit:[],revision:0};
+  m=append(m,{type:'start',striker:'A',nonStriker:'B',bowler:'X'});
+  if(firstRuns)m=append(m,{type:'ball',kind:'normal',runs:firstRuns,running:0,boundary:true});
+  m=append(m,{type:'ball',kind:'normal',runs:0,running:0,wicket:'bowled'});
+  m=append(m,{type:'start',striker:'X',nonStriker:'Y',bowler:'A'});
+  return append(m,{type:'ball',kind:wide?'wide':'normal',runs:wide?0:chaseRuns,running:0,boundary:!wide});
+}
+test('NRR uses full quota for all out and actual balls for early chase with custom over size',()=>{
+  const league=createTournament({...values,teams:['A','B']}),f=league.fixtures[0];
+  const rows=standings(league,[allOutChase(f)]);
+  const a=rows.find(r=>r.name===f.teamA),b=rows.find(r=>r.name===f.teamB);
+  assert.equal(a.oversFor,2);assert.equal(b.oversFor,1/5);
+  assert.equal(a.nrr,4/2-6/(1/5));assert.equal(b.nrr,28);
+  assert.equal(formatNRR(b.nrr),'+28.000');
+});
+test('NRR aggregates runs and overs across matches instead of averaging match rates',()=>{
+  const league=createTournament(values);
+  league.fixtures=[{id:'one',teamA:'Kings',teamB:'Lions',round:1},{id:'two',teamA:'Kings',teamB:'Stars',round:2}];
+  const rows=standings(league,[allOutChase(league.fixtures[0]),completed(league.fixtures[1],6)]);
+  const kings=rows.find(r=>r.name==='Kings');
+  assert.equal(kings.nrr,8/3-12/1.2);
+  assert.notEqual(kings.nrr,(-28-2)/2);
+});
+test('zero legal-ball chases do not produce infinity and pending/undone matches are excluded',()=>{
+  const league=createTournament({...values,teams:['A','B']}),f=league.fixtures[0];
+  const match=allOutChase(f,{firstRuns:0,wide:true});
+  assert(standings(league,[match]).every(r=>r.nrr===null));
+  assert(standings(league,[undo(match)]).every(r=>r.nrr===null&&r.runsFor===0));
+  assert.equal(formatNRR(null),'—');assert.equal(formatNRR(-0.00001),'+0.000');
 });
