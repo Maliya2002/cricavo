@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node scripts/serve.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/storage.js && node --check dist/sw.js && node --check dist/auth.js && node --check dist/account.js && node --check dist/cloud-backups.js && node --check dist/auto-backup.js && node --check dist/cloud-connection.js && node --check dist/tournaments.js && node --check dist/tournament-ui.js && node --check dist/draw-ui.js && node --check dist/tournament-backups.js",
+    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/storage.js && node --check dist/sw.js && node --check dist/auth.js && node --check dist/account.js && node --check dist/cloud-backups.js && node --check dist/auto-backup.js && node --check dist/cloud-connection.js && node --check dist/tournaments.js && node --check dist/tournament-ui.js && node --check dist/draw-ui.js && node --check dist/fixture-filters.js && node --check dist/tournament-backups.js",
     "build": "node scripts/build-vendor.mjs"
   },
   "engines": {

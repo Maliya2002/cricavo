@@ -1,9 +1,11 @@
+import { bindFixtureFilters } from './fixture-filters.js';
 import { createTournament, saveTournament, recordAdvancement, updateDraw, updateFixtureSchedule } from './tournaments.js';
 import { drawUI } from './draw-ui.js';
 import { tournamentBackup, validateTournamentBackup, restoreTournamentCopy, saveTournamentCopy, MAX_TOURNAMENT_BACKUP_BYTES } from './tournament-backups.js';
 import { listMatches, addMatchCopies } from './storage.js';
 
 export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toast, redraw }) {
+  const filterState=new Map();
   const field = (label,name,value,min,max) => `<label class="field">${label}<input name="${name}" type="number" required value="${value}" min="${min}" max="${max}"></label>`;
   function decisionForm(tournament,fixture) {
     return `<form class="stack" data-advancement="${fixture.id}" data-tournament="${tournament.id}"><h3>${t('Organizer advancement decision','සංවිධායකයාගේ ඉදිරි වටයේ තීරණය')}</h3><p class="small muted">${t('The score remains tied. Record an externally decided outcome and its reason. Recorder name is self-reported, not verified. Changing this may invalidate later-round matches.', 'තරග ලකුණු සම ලෙසම පවතී. පිටතදී ගත් තීරණය සහ හේතුව සටහන් කරන්න. සටහන්කරුගේ නම තහවුරු කළ අනන්‍යතාවයක් නොවේ. වෙනස් කිරීමෙන් පසු වටයේ තරගවල ගැටලු ඇති විය හැක.')}</p><label class="field">${t('Advance team','ඉදිරියට යන කණ්ඩායම')}<select name="winner" required><option value="">${t('Choose','තෝරන්න')}</option>${[fixture.teamA,fixture.teamB].map(name=>`<option value="${esc(JSON.stringify(name))}">${esc(name)}</option>`).join('')}<option value="null">${t('Revoke decision — pause advancement','තීරණය අවලංගු කර ඉදිරියට යාම නවත්වන්න')}</option></select></label><label class="field">${t('Reason / tie-break outcome','හේතුව / සම තත්ත්වය විසඳූ ප්‍රතිඵලය')}<input name="reason" required minlength="5" maxlength="300"></label><label class="field">${t('Recorded by','සටහන් කළේ')}<input name="recordedBy" required maxlength="80"></label><p class="form-error" role="alert"></p><button class="btn">${t('Save advancement decision','තීරණය සුරකින්න')}</button></form>`;
@@ -122,6 +124,8 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
     });
   }
   function bind() {
+    const filterForm=document.querySelector('[data-fixture-filters]');
+    if(filterForm){const id=filterForm.dataset.fixtureFilters;if(!filterState.has(id))filterState.set(id,{});bindFixtureFilters(filterForm.parentElement,filterState.get(id));}
     bindSchedules();
     bindBackups();
     bindDraw();

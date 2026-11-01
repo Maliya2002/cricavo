@@ -10,3 +10,5 @@
 @media(max-width:740px){.scoring-grid:has(.scoring-controls){display:flex;flex-direction:column}.scoring-grid:has(.scoring-controls)>.stack{display:contents!important}.scoring-grid:has(.scoring-controls)>.stack>section{width:100%;order:3}.scoring-grid:has(.scoring-controls) .scoreboard{order:0}.scoring-grid:has(.scoring-controls) .scoring-controls{order:1}.scoring-grid:has(.scoring-controls) .active-players{order:2}.scoring-grid:has(.scoring-controls)>.stack>p{order:4}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 .field textarea{font:inherit;width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);resize:vertical;min-height:140px}.field textarea:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+
+[data-fixture-card][hidden], [data-fixture-empty][hidden] { display: none !important; }
