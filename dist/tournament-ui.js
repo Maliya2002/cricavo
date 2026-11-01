@@ -1,0 +1,30 @@
+import { createTournament, saveTournament, standings } from './tournaments.js';
+
+export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toast }) {
+  const field = (label,name,value,min,max) => `<label class="field">${label}<input name="${name}" type="number" required value="${value}" min="${min}" max="${max}"></label>`;
+  function render(id) {
+    const tournaments = getTournaments(), tournament = tournaments.find(v => v.id === id);
+    if (id && !tournament) return `<div class="notice">${t('Tournament not found on this device.', 'තරගාවලිය මෙම උපාංගයේ නැහැ.')} <a href="#tournaments">${t('Back','ආපසු')}</a></div>`;
+    if (tournament) {
+      const matches = getMatches(), rows = standings(tournament,matches);
+      return `<div class="page-head"><div><span class="eyebrow">${t('LEAGUE','ලීග්')}</span><h1>${esc(tournament.name)}</h1><p>${tournament.teams.length} ${t('teams','කණ්ඩායම්')} · ${tournament.overs} ${t('overs','ඕවර')} · ${esc(tournament.ballType)}</p></div><a class="btn" href="#tournaments">${t('All tournaments','තරගාවලි සියල්ල')}</a></div><section class="card stack"><h2>${t('Points','ලකුණු')}</h2><p class="muted small">${t('Win: 2 · Tie: 1 · Loss: 0. Equal points share a position; shown alphabetically. NRR and playoffs are not included yet.', 'ජය: 2 · සම: 1 · පරාජය: 0. සම ලකුණු ඇති කණ්ඩායම් අකාරාදීව දැක්වේ; ස්ථානය සමානයි. NRR සහ playoffs තවම නැහැ.')}</p><div class="table-wrap"><table><thead><tr>${[t('Team','කණ්ඩායම'),t('Played','තරග'),t('Won','ජය'),t('Lost','පරාජ'),t('Tied','සම'),t('Points','ලකුණු')].map(v=>`<th>${v}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.played}</td><td>${r.won}</td><td>${r.lost}</td><td>${r.tied}</td><td><strong>${r.points}</strong></td></tr>`).join('')}</tbody></table></div></section><section class="stack spacer"><h2>${t('Fixtures','තරග ලැයිස්තුව')}</h2>${tournament.fixtures.map(f => { const match = matches.find(m=>m.id===f.id); return `<article class="card"><span class="badge neutral">${t('Round','වටය')} ${f.round}</span><h3>${esc(f.teamA)} · ${esc(f.teamB)}</h3><a class="btn ${match?'':'primary'}" href="#${match?'score':'new'}/${f.id}">${match?t('Open match','තරගය විවෘත කරන්න'):t('Set up match','තරගය සකසන්න')}</a></article>`; }).join('')}</section>`;
+    }
+    return `<div class="page-head"><h1>${t('Tournaments','තරගාවලි')}</h1></div><p class="notice">${t('League fixtures and points are saved on this device. Tournament cloud backup, knockout and group stages are not available yet. Teams and fixtures lock at creation.', 'League තරග සහ ලකුණු මෙම උපාංගයේ සුරැකේ. Tournament cloud backup, knockout සහ group stages තවම නැහැ. සෑදූ පසු teams සහ fixtures වෙනස් කළ නොහැක.')}</p><div class="home-grid"><section class="stack">${tournaments.map(v=>`<article class="card"><h2>${esc(v.name)}</h2><p>${v.teams.length} ${t('teams','කණ්ඩායම්')} · ${v.fixtures.length} ${t('matches','තරග')}</p><a class="btn" href="#tournaments/${v.id}">${t('Fixtures and points','තරග සහ ලකුණු')}</a></article>`).join('') || `<div class="card">${t('Create your first league tournament.','ඔබේ පළමු ලීග් තරගාවලිය සාදන්න.')}</div>`}</section><form id="tournament-form" class="card stack"><h2>${t('Create league','ලීග් තරගාවලියක් සාදන්න')}</h2><label class="field">${t('Tournament name','තරගාවලියේ නම')}<input name="name" required maxlength="80"></label><label class="field">${t('Teams — one per line (2–16)','කණ්ඩායම් — පේළියකට එක බැගින් (2–16)')}<textarea name="teams" rows="6" maxlength="1296" required></textarea></label><label class="field">${t('Ball type','පන්දු වර්ගය')}<select name="ballType"><option value="softball">Softball</option><option value="hardball">Hardball</option></select></label><div class="fields">${field(t('Overs','ඕවර'),'overs',6,1,50)}${field(t('Balls per over','ඕවරයක පන්දු'),'ballsPerOver',6,1,12)}${field(t('Players per team','කණ්ඩායමක ක්‍රීඩකයන්'),'players',8,2,22)}</div><p class="small muted">${t('Each team plays every other team once. Opening players and toss are entered at match setup.', 'සෑම කණ්ඩායමක්ම අනෙක් සෑම කණ්ඩායමක් සමඟ එක් වරක් තරග කරයි. ආරම්භක players සහ toss තරගය සකසන විට දෙන්න.')}</p><p class="form-error" role="alert"></p><button class="btn primary">${t('Create fixtures','තරග ලැයිස්තුව සාදන්න')}</button></form></div>`;
+  }
+  function bind() {
+    const form = document.querySelector('#tournament-form'); if (!form) return;
+    let saving = false;
+    form.onsubmit = async event => {
+      event.preventDefault(); if (saving) return; saving = true;
+      const submit = form.querySelector('button'); submit.disabled = true;
+      try {
+        const values = Object.fromEntries(new FormData(form));
+        const tournament = createTournament({...values, teams:values.teams.split(/\r?\n/)});
+        await saveTournament(tournament); await refresh(); location.hash = '#tournaments/' + tournament.id;
+        toast(t('Tournament saved','තරගාවලිය සුරැකුණා'));
+      } catch(error) { form.querySelector('.form-error').textContent = error.message; }
+      finally { saving = false; submit.disabled = false; }
+    };
+  }
+  return { render, bind };
+}
