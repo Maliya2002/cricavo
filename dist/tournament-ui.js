@@ -1,4 +1,5 @@
-import { createTournament, saveTournament, standings, resolvedFixtures, recordAdvancement, formatNRR, pointsRules } from './tournaments.js';
+import { createTournament, saveTournament, recordAdvancement, updateDraw } from './tournaments.js';
+import { drawUI } from './draw-ui.js';
 import { listMatches } from './storage.js';
 
 export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toast, redraw }) {
@@ -6,21 +7,69 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
   function decisionForm(tournament,fixture) {
     return `<form class="stack" data-advancement="${fixture.id}" data-tournament="${tournament.id}"><h3>${t('Organizer advancement decision','සංවිධායකයාගේ ඉදිරි වටයේ තීරණය')}</h3><p class="small muted">${t('The score remains tied. Record an externally decided outcome and its reason. Recorder name is self-reported, not verified. Changing this may invalidate later-round matches.', 'තරග ලකුණු සම ලෙසම පවතී. පිටතදී ගත් තීරණය සහ හේතුව සටහන් කරන්න. සටහන්කරුගේ නම තහවුරු කළ අනන්‍යතාවයක් නොවේ. වෙනස් කිරීමෙන් පසු වටයේ තරගවල ගැටලු ඇති විය හැක.')}</p><label class="field">${t('Advance team','ඉදිරියට යන කණ්ඩායම')}<select name="winner" required><option value="">${t('Choose','තෝරන්න')}</option>${[fixture.teamA,fixture.teamB].map(name=>`<option value="${esc(JSON.stringify(name))}">${esc(name)}</option>`).join('')}<option value="null">${t('Revoke decision — pause advancement','තීරණය අවලංගු කර ඉදිරියට යාම නවත්වන්න')}</option></select></label><label class="field">${t('Reason / tie-break outcome','හේතුව / සම තත්ත්වය විසඳූ ප්‍රතිඵලය')}<input name="reason" required minlength="5" maxlength="300"></label><label class="field">${t('Recorded by','සටහන් කළේ')}<input name="recordedBy" required maxlength="80"></label><p class="form-error" role="alert"></p><button class="btn">${t('Save advancement decision','තීරණය සුරකින්න')}</button></form>`;
   }
-  function knockout(tournament,matches) {
-    const fixtures=resolvedFixtures(tournament,matches), champion=fixtures.at(-1)?.winner;
-    return `<div class="page-head"><div><span class="eyebrow">KNOCKOUT</span><h1>${esc(tournament.name)}</h1></div><a class="btn" href="#tournaments">${t('All tournaments','තරගාවලි සියල්ල')}</a></div><p class="notice">${t('Winners advance automatically. Byes are awarded in team-entry order. Tied matches pause until an organizer records an advancement decision. Super-over scoring is not available yet.', 'ජයග්‍රාහකයන් ඊළඟ වටයට යයි. Teams ඇතුළත් කළ අනුපිළිවෙළට byes ලැබේ. සම තරගවලදී සංවිධායක තීරණයක් සටහන් කරන තුරු bracket එක නවතී. Super-over scoring තවම නැහැ.')}</p>${champion?`<section class="card spacer"><span class="badge">${t('CHAMPION','ශූරයා')}</span><h2>${esc(champion)}</h2></section>`:''}<section class="stack spacer">${fixtures.map((f,index)=>{const match=matches.find(m=>m.id===f.id);return `<article class="card stack"><span class="badge neutral">${index===fixtures.length-1?t('Final','අවසන් තරගය'):t('Round','වටය')+' '+f.round}</span><h3>${esc(f.teamA||t('Awaiting winner','ජයග්‍රාහකයා තවම නැහැ'))} · ${esc(f.teamB||(f.bye?t('Bye','නිතරග ජය'):t('Awaiting winner','ජයග්‍රාහකයා තවම නැහැ')))}</h3>${f.conflict?`<p class="form-error">${t('An earlier result changed. This match is preserved but cannot advance or be scored until the earlier result is restored.', 'පෙර ප්‍රතිඵලයක් වෙනස් වී ඇත. මෙම තරගය සුරැකී ඇත; පෙර ප්‍රතිඵලය යථා තත්ත්වයට පත් වන තුරු scoring සහ ඉදිරියට යාම නවතී.')}</p>`:f.bye?`<p>${esc(f.winner)} — ${t('advances with a bye','නිතරගයෙන් ඊළඟ වටයට')}</p>`:f.waiting?`<p class="muted">${t('Waiting for earlier results','පෙර තරග ප්‍රතිඵල බලාපොරොත්තුවෙන්')}</p>`:''}${f.tied?`<p>${f.decision?t('Tied score — organizer decision applied.','සම ලකුණු — සංවිධායක තීරණය යොදා ඇත.'):t('Match tied — no winner advanced.','තරගය සමයි — කිසිවෙකු ඊළඟ වටයට යවා නැත.')}</p>${decisionForm(tournament,f)}`:''}${f.winner&&!f.bye?`<p>${t('Winner','ජයග්‍රාහකයා')}: ${esc(f.winner)}</p>`:''}${f.ready?`<a class="btn" href="#${match?'score':'new'}/${f.id}">${match?t('Open match','තරගය විවෘත කරන්න'):t('Set up match','තරගය සකසන්න')}</a>`:''}</article>`;}).join('')}</section><section class="card stack spacer"><h2>${t('Advancement history','ඉදිරි වට තීරණ ඉතිහාසය')}</h2>${(tournament.decisions||[]).map(d=>`<div><strong>${esc(d.winner||t('Decision revoked','තීරණය අවලංගුයි'))}</strong><p>${esc(d.reason)}</p><small>${esc(d.recordedBy)} · ${esc(new Date(d.at).toLocaleString())} · ${esc(d.fixtureId)}</small></div>`).join('')||`<p>${t('No decisions recorded.','තීරණ සටහන් කර නැහැ.')}</p>`}</section>`;
-  }
   function render(id) {
     const tournaments = getTournaments(), tournament = tournaments.find(v => v.id === id);
     if (id && !tournament) return `<div class="notice">${t('Tournament not found on this device.', 'තරගාවලිය මෙම උපාංගයේ නැහැ.')} <a href="#tournaments">${t('Back','ආපසු')}</a></div>`;
-    if (tournament?.format === 'knockout') return knockout(tournament,getMatches());
-    if (tournament) {
-      const matches = getMatches(), rows = standings(tournament,matches), points = pointsRules(tournament.points);
-      return `<div class="page-head"><div><span class="eyebrow">${t('LEAGUE','ලීග්')}</span><h1>${esc(tournament.name)}</h1><p>${tournament.teams.length} ${t('teams','කණ්ඩායම්')} · ${tournament.overs} ${t('overs','ඕවර')} · ${esc(tournament.ballType)}</p></div><a class="btn" href="#tournaments">${t('All tournaments','තරගාවලි සියල්ල')}</a></div><section class="card stack"><h2>${t('Points','ලකුණු')}</h2><p>${t('Win','ජය')}: ${points.win} · ${t('Tie','සම')}: ${points.tie} · ${t('Loss','පරාජය')}: ${points.loss}</p><p class="muted small">${t('Order: points, then NRR; exact ties shown alphabetically. NRR uses completed matches and each match’s balls per over. All-out innings use the full quota. — means no calculable rate yet. DLS/revised targets are not supported.', 'පිළිවෙළ: ලකුණු, ඉන්පසු NRR; දෙකම සම නම් අකාරාදීව. අවසන් තරග සහ එක් එක් තරගයේ ඕවරයක පන්දු ගණන භාවිත වේ. All-out සඳහා සම්පූර්ණ ඕවර ගණන ගනී. — යනු තවම ගණනය කළ නොහැක. DLS/revised targets තවම නැහැ.')}</p><div class="table-wrap"><table><thead><tr>${[t('Team','කණ්ඩායම'),t('Played','තරග'),t('Won','ජය'),t('Lost','පරාජ'),t('Tied','සම'),t('Points','ලකුණු'),'NRR'].map(v=>`<th>${v}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.played}</td><td>${r.won}</td><td>${r.lost}</td><td>${r.tied}</td><td><strong>${r.points}</strong></td><td>${formatNRR(r.nrr)}</td></tr>`).join('')}</tbody></table></div></section><section class="stack spacer"><h2>${t('Fixtures','තරග ලැයිස්තුව')}</h2>${tournament.fixtures.map(f => { const match = matches.find(m=>m.id===f.id); return `<article class="card"><span class="badge neutral">${t('Round','වටය')} ${f.round}</span><h3>${esc(f.teamA)} · ${esc(f.teamB)}</h3><a class="btn ${match?'':'primary'}" href="#${match?'score':'new'}/${f.id}">${match?t('Open match','තරගය විවෘත කරන්න'):t('Set up match','තරගය සකසන්න')}</a></article>`; }).join('')}</section>`;
-    }
-    return `<div class="page-head"><h1>${t('Tournaments','තරගාවලි')}</h1></div><p class="notice">${t('League and knockout tournaments are saved on this device. Cloud tournament backup and group stages are not available yet. Teams and fixtures lock at creation.', 'League සහ knockout තරගාවලි මෙම උපාංගයේ සුරැකේ. Cloud tournament backup සහ group stages තවම නැහැ. සෑදූ පසු teams සහ fixtures වෙනස් කළ නොහැක.')}</p><div class="home-grid"><section class="stack">${tournaments.map(v=>`<article class="card"><h2>${esc(v.name)}</h2><p>${v.teams.length} ${t('teams','කණ්ඩායම්')} · ${v.format==='knockout'?v.teams.length-1:v.fixtures.length} ${t('matches','තරග')} · ${esc(v.format)}</p><a class="btn" href="#tournaments/${v.id}">${t('Fixtures and points','තරග සහ ලකුණු')}</a></article>`).join('') || `<div class="card">${t('Create your first tournament.','ඔබේ පළමු තරගාවලිය සාදන්න.')}</div>`}</section><form id="tournament-form" class="card stack"><h2>${t('Create tournament','තරගාවලියක් සාදන්න')}</h2><label class="field">${t('Format','ආකෘතිය')}<select name="format"><option value="league">League</option><option value="knockout">Knockout</option></select></label><label class="field">${t('Tournament name','තරගාවලියේ නම')}<input name="name" required maxlength="80"></label><label class="field">${t('Teams — one per line (2–16)','කණ්ඩායම් — පේළියකට එක බැගින් (2–16)')}<textarea name="teams" rows="6" maxlength="1296" required></textarea></label><label class="field">${t('Ball type','පන්දු වර්ගය')}<select name="ballType"><option value="softball">Softball</option><option value="hardball">Hardball</option></select></label><div class="fields">${field(t('Overs','ඕවර'),'overs',6,1,50)}${field(t('Balls per over','ඕවරයක පන්දු'),'ballsPerOver',6,1,12)}${field(t('Players per team','කණ්ඩායමක ක්‍රීඩකයන්'),'players',8,2,22)}</div><fieldset id="league-points" class="stack"><legend>${t('League points — locked at creation','League ලකුණු — සෑදූ පසු වෙනස් නොවේ')}</legend><div class="fields">${field(t('Win','ජය'),'winPoints',2,0,20)}${field(t('Tie','සම'),'tiePoints',1,0,20)}${field(t('Loss','පරාජය'),'lossPoints',0,0,20)}</div></fieldset><p class="small muted">${t('League: every pair plays once. Knockout: winners advance, with byes for extra slots. Enter teams in seed order. Players and toss are entered at match setup.', 'League: සියලු කණ්ඩායම් එකිනෙකා සමඟ තරග කරයි. Knockout: ජයග්‍රාහකයා ඉදිරියට යයි. Teams seed අනුපිළිවෙළට ඇතුළත් කරන්න. Players සහ toss තරගය සකසන විට දෙන්න.')}</p><p class="form-error" role="alert"></p><button class="btn primary">${t('Create fixtures','තරග ලැයිස්තුව සාදන්න')}</button></form></div>`;
+    if (tournament) return drawUI({t,esc,decisionForm}).render(tournament,getMatches());
+    return `<div class="page-head"><h1>${t('Tournaments','තරගාවලි')}</h1></div><p class="notice">${t('Tournaments are saved on this device. Choose team and group counts, assign groups, repeat league meetings, or build a manual draw. Team lists lock at creation.', 'තරගාවලි මෙම උපාංගයේ සුරැකේ. Team සහ group ගණන තෝරා teams බෙදන්න. League වට ගණන තෝරා හෝ manual draw එකක් සාදන්න. සෑදූ පසු team ලැයිස්තුව වෙනස් නොවේ.')}</p><div class="home-grid"><section class="stack">${tournaments.map(v=>`<article class="card"><h2>${esc(v.name)}</h2><p>${v.teams.length} ${t('teams','කණ්ඩායම්')} · ${v.fixtures.length} ${t('matches','තරග')} · ${esc(v.format)}</p><a class="btn" href="#tournaments/${v.id}">${t('Fixtures and points','තරග සහ ලකුණු')}</a></article>`).join('') || `<div class="card">${t('Create your first tournament.','ඔබේ පළමු තරගාවලිය සාදන්න.')}</div>`}</section><form id="tournament-form" class="card stack"><h2>${t('Create tournament','තරගාවලියක් සාදන්න')}</h2><label class="field">${t('Format','ආකෘතිය')}<select name="format"><option value="league">League</option><option value="knockout">Knockout</option><option value="groups">Group league + playoffs</option><option value="manual">Manual draw</option></select></label><label class="field">${t('Tournament name','තරගාවලියේ නම')}<input name="name" required maxlength="80"></label><label class="field">${t('Teams — one per line (2+)','කණ්ඩායම් — පේළියකට එක බැගින් (2+)')}<textarea name="teams" rows="6" required></textarea></label><section id="group-settings" class="stack" hidden><label class="field">${t('Number of groups','Group ගණන')}<input name="groupCount" type="number" min="1" step="1" value="2"></label><div id="group-assignments" class="stack"></div><label class="field">${t('Playoff template','Playoff ආකෘතිය')}<select name="playoffs"><option value="qualifier">2 groups: Qualifier 1 → Eliminator → Qualifier 2 → Final</option><option value="semis">2 groups: Cross semi-finals → Final</option><option value="none">Custom / add playoffs manually</option></select></label></section><label class="field" id="cycles-field">${t('League meetings per pair','Teams දෙකක් අතර තරග ගණන')}<input name="cycles" type="number" min="1" step="1" value="1"></label><label class="field">${t('Ball type','පන්දු වර්ගය')}<select name="ballType"><option value="softball">Softball</option><option value="hardball">Hardball</option></select></label><div class="fields">${field(t('Overs','ඕවර'),'overs',6,1,50)}${field(t('Balls per over','ඕවරයක පන්දු'),'ballsPerOver',6,1,12)}${field(t('Players per team','කණ්ඩායමක ක්‍රීඩකයන්'),'players',8,2,22)}</div><fieldset id="league-points" class="stack"><legend>${t('League points — locked at creation','League ලකුණු — සෑදූ පසු වෙනස් නොවේ')}</legend><div class="fields">${field(t('Win','ජය'),'winPoints',2,0,20)}${field(t('Tie','සම'),'tiePoints',1,0,20)}${field(t('Loss','පරාජය'),'lossPoints',0,0,20)}</div></fieldset><p class="small muted">${t('League: each pair plays the selected number of meetings. Knockout: winners advance, with byes for extra slots. Enter teams in seed order. Players and toss are entered at match setup.', 'League: සියලු කණ්ඩායම් එකිනෙකා සමඟ තරග කරයි. Knockout: ජයග්‍රාහකයා ඉදිරියට යයි. Teams seed අනුපිළිවෙළට ඇතුළත් කරන්න. Players සහ toss තරගය සකසන විට දෙන්න.')}</p><p class="form-error" role="alert"></p><button class="btn primary">${t('Create fixtures','තරග ලැයිස්තුව සාදන්න')}</button></form></div>`;
+  }
+  function updateGroups(form) {
+    const grouped=form.elements.format.value==='groups';
+    form.querySelector('#group-settings').hidden=!grouped;
+    const teams=form.elements.teams.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+    const count=Number(form.elements.groupCount.value);
+    form.querySelector('#cycles-field').hidden=!['league','groups'].includes(form.elements.format.value);
+    form.elements.groupCount.required=grouped; form.elements.groupCount.disabled=!grouped; form.elements.cycles.disabled=!['league','groups'].includes(form.elements.format.value);
+    form.elements.groupCount.max=Math.max(1,teams.length);
+    const container=form.querySelector('#group-assignments');
+    const old=new Map([...container.querySelectorAll('[data-team]')].map(el=>[el.dataset.team,el.value]));
+    const oldNames=[...container.querySelectorAll('[data-group-name]')].map(el=>el.value);
+    if(!Number.isInteger(count)||count<1||count>teams.length){container.innerHTML='';return;}
+    container.innerHTML=Array.from({length:count},(_,i)=>`<label class="field">${t('Group name','Group නම')} ${i+1}<input data-group-name="${i}" maxlength="80" value="${esc(oldNames[i]||'Group '+(i+1))}"></label>`).join('')+teams.map((name,i)=>`<label class="field">${esc(name)}<select data-team="${esc(name)}">${Array.from({length:count},(_,g)=>`<option value="${g}" ${Number(old.get(name)??Math.floor(i*count/teams.length))===g?'selected':''}>Group ${g+1}</option>`).join('')}</select></label>`).join('');
+    const template=form.elements.playoffs;
+    [...template.options].forEach(o=>o.disabled=o.value!=='none'&&count!==2);
+    if(count!==2)template.value='none';
+  }
+  function readGroups(form,teams) {
+    if(form.elements.format.value!=='groups')return [];
+    const count=Number(form.elements.groupCount.value);
+    if(!Number.isInteger(count)||count<1||count>teams.length)throw Error('Choose a group count between 1 and the number of teams');
+    const groups=Array.from({length:count},(_,i)=>({name:form.querySelector(`[data-group-name="${i}"]`)?.value||'Group '+(i+1),teams:[]}));
+    form.querySelectorAll('[data-team]').forEach(el=>groups[Number(el.value)]?.teams.push(el.dataset.team));
+    return groups;
+  }
+  function bindDraw() {
+    document.querySelectorAll('[data-draw]').forEach(form=>{
+      const tournament=getTournaments().find(v=>v.id===form.dataset.draw);
+      const fixture=tournament.fixtures.find(f=>f.id===form.dataset.fixture);
+      form.parentElement.addEventListener('toggle',()=>{
+        if(!form.parentElement.open||form.dataset.hydrated)return;
+        form.dataset.hydrated='true';
+        const choices=drawUI({t,esc,decisionForm}).sources(tournament,fixture?tournament.fixtures.indexOf(fixture):tournament.fixtures.length);
+        for(const side of ['A','B'])form.elements['source'+side].insertAdjacentHTML('beforeend',choices);
+      if(fixture) {
+        form.elements.stage.value=fixture.stage||(tournament.format==='league'?'league':'playoff');
+        if(fixture.group)form.elements.group.value=fixture.group;
+        for(const side of ['A','B']) {
+          const source=fixture['source'+side]||(fixture['from'+side]?{type:'winner',fixture:fixture['from'+side]}:{type:'team',team:fixture['team'+side]});
+          form.elements['source'+side].value=JSON.stringify(source);
+        }
+      }
+      });
+      let saving=false;
+      form.onsubmit=async event=>{
+        event.preventDefault();if(saving)return;saving=true;
+        try {
+          const values=Object.fromEntries(new FormData(form));
+          const remove=event.submitter?.value==='remove';
+          const updated=updateDraw(tournament,await listMatches(),{...values,id:fixture?.id,remove,...(!remove?{sourceA:JSON.parse(values.sourceA),sourceB:JSON.parse(values.sourceB)}:{})});
+          await saveTournament(updated,tournament.revision||0);await refresh();redraw();toast(t('Draw saved','Draw එක සුරැකුණා'));
+        }catch(error){form.querySelector('.form-error').textContent=error.message;}finally{saving=false;}
+      };
+    });
   }
   function bind() {
+    bindDraw();
     document.querySelectorAll('[data-advancement]').forEach(form => {
       let saving = false;
       form.onsubmit = async event => {
@@ -38,14 +87,14 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
     });
     const form = document.querySelector('#tournament-form'); if (!form) return;
     const updatePoints = () => { const fields=form.querySelector('#league-points'); fields.hidden=form.elements.format.value==='knockout'; fields.disabled=fields.hidden; };
-    form.elements.format.addEventListener('change',updatePoints); updatePoints();
+    form.elements.format.addEventListener('change',()=>{updatePoints();updateGroups(form)}); form.elements.teams.addEventListener('change',()=>updateGroups(form)); form.elements.groupCount.addEventListener('change',()=>updateGroups(form)); updatePoints(); updateGroups(form);
     let saving = false;
     form.onsubmit = async event => {
       event.preventDefault(); if (saving) return; saving = true;
       const submit = form.querySelector('button'); submit.disabled = true;
       try {
         const values = Object.fromEntries(new FormData(form));
-        const tournament = createTournament({...values, points:values.format==='league'?{win:values.winPoints,tie:values.tiePoints,loss:values.lossPoints}:undefined, teams:values.teams.split(/\r?\n/)});
+        const tournament = createTournament({...values, groups:readGroups(form,values.teams.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)),playoffs:values.format==='groups'?values.playoffs:'none',points:values.format!=='knockout'?{win:values.winPoints,tie:values.tiePoints,loss:values.lossPoints}:undefined, teams:values.teams.split(/\r?\n/)});
         await saveTournament(tournament); await refresh(); location.hash = '#tournaments/' + tournament.id;
         toast(t('Tournament saved','තරගාවලිය සුරැකුණා'));
       } catch(error) { form.querySelector('.form-error').textContent = error.message; }

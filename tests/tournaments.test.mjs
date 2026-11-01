@@ -1,9 +1,51 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement,formatNRR,pointsRules} from '../dist/tournaments.js';
+import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement,formatNRR,pointsRules,updateDraw} from '../dist/tournaments.js';
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
+test('custom group counts and repeated meetings support more than 16 teams and 8 groups',()=>{
+  const teams=Array.from({length:30},(_,i)=>'T'+i);
+  const groups=Array.from({length:10},(_,i)=>({name:'G'+i,teams:teams.slice(i*3,i*3+3)}));
+  const tournament=createTournament({...values,teams,groups,format:'groups',cycles:5});
+  assert.equal(tournament.groups.length,10);assert.equal(tournament.fixtures.length,150);
+  for(const f of tournament.fixtures){const g=tournament.groups.find(g=>g.id===f.group);assert(g.teams.includes(f.teamA)&&g.teams.includes(f.teamB));}
+  assert.equal(createTournament({...values,teams,format:'manual'}).fixtures.length,0);
+  assert.throws(()=>createTournament({...values,teams,groups:[{teams}],format:'groups',cycles:100}),/10,000/);
+});
+test('ten teams in two groups generate 20 league games and the selected qualifier path',()=>{
+  const teams=Array.from({length:10},(_,i)=>'T'+i),groups=[{name:'A',teams:teams.slice(0,5)},{name:'B',teams:teams.slice(5)}];
+  const tournament=createTournament({...values,teams,groups,format:'groups',playoffs:'qualifier'});
+  assert.equal(tournament.fixtures.length,24);
+  const matches=tournament.fixtures.filter(f=>f.stage==='league').map(f=>completed(f,Number(f.teamA.slice(1))<Number(f.teamB.slice(1))?0:6));
+  let fixtures=resolvedFixtures(tournament,matches),playoffs=fixtures.filter(f=>f.stage==='playoff');
+  assert.equal(playoffs[0].teamA,'T0');assert.equal(playoffs[0].teamB,'T5');
+  assert.equal(playoffs[1].teamA,'T1');assert.equal(playoffs[1].teamB,'T6');
+  matches.push(completed(playoffs[0],6),completed(playoffs[1],6));
+  playoffs=resolvedFixtures(tournament,matches).filter(f=>f.stage==='playoff');
+  assert.equal(playoffs[2].teamA,'T0');assert.equal(playoffs[2].teamB,'T6');
+  matches.push(completed(playoffs[2],6));playoffs=resolvedFixtures(tournament,matches).filter(f=>f.stage==='playoff');
+  assert.equal(playoffs[3].teamA,'T5');assert.equal(playoffs[3].teamB,'T6');
+  const final=completed(playoffs[3],6);matches.push(final);
+  assert.equal(resolvedFixtures(tournament,matches).at(-1).winner,'T6');
+  matches[0]=undo(matches[0]);assert(resolvedFixtures(tournament,matches).at(-1).conflict);
+});
+test('ambiguous ranks wait; manual draw supports earlier winner and loser with safe edits',()=>{
+  let tournament=createTournament({...values,teams:['A','B','C','D'],format:'manual'});
+  const direct=team=>({type:'team',team});
+  tournament=updateDraw(tournament,[],{round:1,label:'Qualifier',sourceA:direct('A'),sourceB:direct('B')});
+  const first=tournament.fixtures[0];
+  tournament=updateDraw(tournament,[],{round:2,sourceA:{type:'loser',fixture:first.id},sourceB:direct('C')});
+  const match=completed(resolvedFixtures(tournament,[])[0],6);
+  assert.equal(resolvedFixtures(tournament,[match])[1].teamA,'A');
+  assert.throws(()=>updateDraw(tournament,[match],{id:first.id,remove:true}),/already set up/);
+  assert.throws(()=>updateDraw(tournament,[],{id:first.id,remove:true}),/dependent/);
+  assert.throws(()=>updateDraw(tournament,[],{id:first.id,round:1,sourceA:{type:'winner',fixture:tournament.fixtures[1].id},sourceB:direct('D')}),/earlier/);
+  assert.throws(()=>updateDraw(tournament,[],{round:1,sourceA:direct('A'),sourceB:direct('A')}),/different/);
+  const grouped=createTournament({...values,teams:['A','B','C','D'],format:'groups',groups:[{teams:['A','B']},{teams:['C','D']}],playoffs:'qualifier'});
+  const ties=grouped.fixtures.filter(f=>f.stage==='league').map(f=>completed(f,4));
+  assert(resolvedFixtures(grouped,ties).filter(f=>f.stage==='playoff').every(f=>f.waiting));
+});
 test('round robin schedules every pair exactly once without two games in one round, including byes',()=>{
   for(let count=2;count<=16;count++) {
     const teams=Array.from({length:count},(_,i)=>'Team '+i),fixtures=roundRobin(teams),pairs=new Set(),rounds=new Map();
@@ -18,7 +60,7 @@ test('round robin schedules every pair exactly once without two games in one rou
 });
 test('tournament input rejects duplicate teams and invalid rules',()=>{
   assert.throws(()=>createTournament({...values,teams:[' Kings ','kings']}),/unique/);
-  assert.throws(()=>createTournament({...values,teams:['Only']}),/2–16/);
+  assert.throws(()=>createTournament({...values,teams:['Only']}),/at least 2/);
   assert.throws(()=>createTournament({...values,overs:0}),/Overs/);
   assert.throws(()=>createTournament({...values,ballsPerOver:1.5}),/Balls/);
   const league=createTournament(values);assert.equal(new Set(league.fixtures.map(f=>f.id)).size,3);
@@ -29,7 +71,7 @@ function completed(f,secondRuns){
   m=append(m,{type:'start',striker:'A',nonStriker:'B',bowler:'X'});
   m=append(m,{type:'ball',kind:'normal',runs:4,running:0,boundary:true});
   m=append(m,{type:'start',striker:'X',nonStriker:'Y',bowler:'A'});
-  return append(m,{type:'ball',kind:'normal',runs:secondRuns,running:0,boundary:true});
+  return append(m,{type:'ball',kind:'normal',runs:secondRuns,running:0,boundary:secondRuns===4||secondRuns===6});
 }
 test('points use finished fixtures only and recompute when a result is undone',()=>{
   const league=createTournament(values),f=league.fixtures[0],win=completed(f,6);
