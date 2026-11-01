@@ -4,6 +4,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {tournamentUI} from '../dist/tournament-ui.js';
 import {createTournament,listTournaments,saveTournament} from '../dist/tournaments.js';
+import {tournamentBackup,MAX_TOURNAMENT_BACKUP_BYTES} from '../dist/tournament-backups.js';
+import {listMatches,saveMatch,addMatchCopies} from '../dist/storage.js';
+import {append,replay} from '../dist/engine.js';
 
 const config={name:'UI Cup',teams:['A','B','C','D'],overs:6,ballsPerOver:6,players:8,ballType:'softball'};
 const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
@@ -51,4 +54,44 @@ test('award eligibility toggles required final selection and persists all-team p
   const tournament=createTournament({...config,name:'DOM awards',format:'knockout'});await saveTournament(tournament);const h=harness(t,[tournament]);h.render(tournament.id);
   const form=document.querySelector('[data-award-settings]');assert.equal(form.elements.scope.value,'finalists');assert(form.elements.finalId.required);assert(form.elements.finalId.value);
   h.change(form.elements.scope,'all');assert(form.elements.finalId.disabled);await h.submit(form);assert.equal(form.querySelector('.form-error').textContent,'');assert.equal((await listTournaments()).find(v=>v.id===tournament.id).awardScope,'all');
+});
+
+test('backup preview and restore keep original scores and create a linked new tournament copy',async t=>{
+  const tournament=createTournament({...config,name:'DOM backup'}),fixture=tournament.fixtures[0];await saveTournament(tournament);
+  let match={id:fixture.id,tournamentId:tournament.id,schemaVersion:1,revision:0,events:[],audit:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),settings:{...config,teamA:fixture.teamA,teamB:fixture.teamB,battingFirst:'A',widePenalty:1,noBallPenalty:1}};
+  match=append(match,{type:'start',striker:'One',nonStriker:'Two',bowler:'Three'});match=append(match,{type:'ball',kind:'normal',runs:4,running:0,boundary:true});await saveMatch(match,null);
+  const original=JSON.stringify(match),file=JSON.stringify(tournamentBackup(tournament,[match]));
+  const h=harness(t);h.render();const form=document.querySelector('#restore-tournament'),input=form.elements.backup;
+  Object.defineProperty(input,'files',{configurable:true,value:[{size:file.length,text:async()=>file}]});await input.onchange();
+  assert.equal(form.querySelector('.form-error').textContent,'');assert(form.querySelector('[data-preview]').textContent.includes('1 saved matches'));assert(!form.querySelector('button').disabled);
+  await h.submit(form);assert.equal(form.querySelector('.form-error').textContent,'');
+  const restored=(await listTournaments()).find(v=>v.restoredFrom===tournament.id);assert(restored);assert.notEqual(restored.id,tournament.id);
+  const matches=await listMatches(),copy=matches.find(m=>m.tournamentId===restored.id);assert(copy);assert.notEqual(copy.id,match.id);assert(restored.fixtures.some(f=>f.id===copy.id));assert.equal(replay(copy).current.total,4);assert.equal(JSON.stringify(matches.find(m=>m.id===match.id)),original);
+});
+
+test('invalid or oversized files disable restore, and a slow older file cannot replace the current selection',async t=>{
+  const h=harness(t);h.render();const form=document.querySelector('#restore-tournament'),input=form.elements.backup,button=form.querySelector('button');
+  const choose=file=>{Object.defineProperty(input,'files',{configurable:true,value:[file]});return input.onchange();};
+  await choose({size:2,text:async()=>'{!'});assert(button.disabled);assert(form.querySelector('.form-error').textContent);
+  await choose({size:MAX_TOURNAMENT_BACKUP_BYTES+1,text:async()=>{throw Error('Should not read oversized file');}});assert(button.disabled);assert.match(form.querySelector('.form-error').textContent,/25 MB/);
+  let resolveOld;const old=JSON.stringify(tournamentBackup(createTournament({...config,name:'Older selection'}),[]));
+  const pending=choose({size:old.length,text:()=>new Promise(resolve=>{resolveOld=resolve;})});
+  const recent=JSON.stringify(tournamentBackup(createTournament({...config,name:'Current selection'}),[]));
+  await choose({size:recent.length,text:async()=>recent});resolveOld(old);await pending;
+  assert(!button.disabled);assert(form.querySelector('[data-preview]').textContent.startsWith('Current selection'));
+});
+
+test('stale schedule form refuses to overwrite a newer tournament revision',async t=>{
+  const tournament=createTournament({...config,name:'DOM stale schedule'});await saveTournament(tournament);
+  const h=harness(t,[tournament]);h.render(tournament.id);const form=document.querySelector('[data-schedule]');
+  await saveTournament({...tournament,revision:1,name:'Saved in another tab'},0);
+  form.elements.venue.value='Attempted stale venue';await h.submit(form);
+  assert.match(form.querySelector('.form-error').textContent,/another tab/);assert(!form.querySelector('button').disabled);
+  const saved=(await listTournaments()).find(v=>v.id===tournament.id);assert.equal(saved.name,'Saved in another tab');assert.equal(saved.fixtures[0].venue,undefined);
+});
+
+test('bulk restored score writes roll back entirely when any ID already exists',async()=>{
+  const now=new Date().toISOString(),existing={id:crypto.randomUUID(),revision:0,updatedAt:now},fresh={id:crypto.randomUUID(),revision:0,updatedAt:now};
+  await addMatchCopies([existing]);await assert.rejects(addMatchCopies([fresh,{...existing,revision:99}]));
+  const stored=await listMatches();assert(!stored.some(m=>m.id===fresh.id));assert.equal(stored.find(m=>m.id===existing.id).revision,0);
 });
