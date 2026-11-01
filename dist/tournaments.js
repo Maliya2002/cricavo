@@ -130,6 +130,7 @@ export function createTournament({ name, teams, ballType, overs, ballsPerOver, p
   const fixtureCount=tournament.groups.reduce((n,g)=>n+g.teams.length*(g.teams.length-1)/2*cycles,0);
   if(fixtureCount>10000)throw Error('This automatic draw exceeds 10,000 matches. Use more groups, fewer meetings, or a manual draw.');
   for(const group of tournament.groups) {
+    if(group.teams.length<2)continue;
     const schedule=roundRobin(group.teams), rounds=schedule.reduce((max,f)=>Math.max(max,f.round),0);
     for(let cycle=0;cycle<cycles;cycle++)tournament.fixtures.push(...schedule.map(f=>({...f,id:uuid(),round:f.round+cycle*rounds,cycle:cycle+1,group:group.id,stage:'league',...(cycle%2?{teamA:f.teamB,teamB:f.teamA}:{})})));
   }
@@ -200,7 +201,7 @@ export function updateDraw(tournament,matches,input,uuid=()=>crypto.randomUUID()
   }
   // Do not rewrite the qualifying schedule once a dependent playoff is set up.
   const old=tournament.fixtures[index];
-  const changedGroups=new Set([old?.group,fixtures[index]?.group].filter(Boolean));
+  const changedGroups=new Set([old?.group,input.remove?undefined:fixtures[index]?.group].filter(Boolean));
   if(tournament.fixtures.some(f=>matches.some(m=>m.id===f.id)&&[f.sourceA,f.sourceB].some(s=>s?.type==='rank'&&changedGroups.has(s.group))))throw Error('This group has a playoff already set up; its league draw is locked');
   return {...tournament,fixtures,revision:(tournament.revision||0)+1};
 }

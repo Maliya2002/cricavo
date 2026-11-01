@@ -4,6 +4,21 @@ import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
+test('singleton groups skip empty rounds even for a large repeat count',()=>{
+  const teams=['A','B'];
+  const tournament=createTournament({...values,teams,format:'groups',groups:teams.map(team=>({name:team,teams:[team]})),cycles:Number.MAX_SAFE_INTEGER});
+  assert.equal(tournament.fixtures.length,0);
+});
+test('removing an unrelated group fixture preserves the actual playoff group lock',()=>{
+  const teams=['A','B','C','D'];
+  let tournament=createTournament({...values,teams,format:'groups',groups:[{name:'A',teams:teams.slice(0,2)},{name:'B',teams:teams.slice(2)}]});
+  tournament=updateDraw(tournament,[],{round:2,sourceA:{type:'rank',group:'g1',rank:1},sourceB:{type:'team',team:'A'}});
+  const [first,second,playoff]=tournament.fixtures;
+  const matches=[{id:playoff.id}];
+  const edited=updateDraw(tournament,matches,{id:first.id,remove:true});
+  assert.deepEqual(edited.fixtures.map(f=>f.id),[second.id,playoff.id]);
+  assert.throws(()=>updateDraw(tournament,matches,{id:second.id,remove:true}),/locked/);
+});
 test('custom group counts and repeated meetings support more than 16 teams and 8 groups',()=>{
   const teams=Array.from({length:30},(_,i)=>'T'+i);
   const groups=Array.from({length:10},(_,i)=>({name:'G'+i,teams:teams.slice(i*3,i*3+3)}));
