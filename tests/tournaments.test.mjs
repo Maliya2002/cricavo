@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement,formatNRR} from '../dist/tournaments.js';
+import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement,formatNRR,pointsRules} from '../dist/tournaments.js';
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
@@ -122,4 +122,20 @@ test('zero legal-ball chases do not produce infinity and pending/undone matches 
   assert(standings(league,[match]).every(r=>r.nrr===null));
   assert(standings(league,[undo(match)]).every(r=>r.nrr===null&&r.runsFor===0));
   assert.equal(formatNRR(null),'—');assert.equal(formatNRR(-0.00001),'+0.000');
+});
+
+test('custom league points apply to wins, ties and losses without changing NRR',()=>{
+  const league=createTournament({...values,teams:['A','B'],points:{win:5,tie:3,loss:1}}),f=league.fixtures[0],match=completed(f,6);
+  const rows=standings(league,[match]),standard=standings({...league,points:undefined},[match]);
+  assert.equal(rows.find(r=>r.name===f.teamB).points,5);
+  assert.equal(rows.find(r=>r.name===f.teamA).points,1);
+  for(const row of rows)assert.equal(row.nrr,standard.find(r=>r.name===row.name).nrr);
+  assert(standings(league,[completed(f,4)]).every(r=>r.points===3));
+  assert(standings(league,[undo(match)]).every(r=>r.points===0));
+  assert.equal(standard.find(r=>r.name===f.teamB).points,2);
+});
+test('points rules keep legacy defaults and reject invalid or reversed allocations',()=>{
+  assert.deepEqual(pointsRules(),{win:2,tie:1,loss:0});
+  assert.deepEqual(pointsRules({win:'3',tie:'1',loss:'0'}),{win:3,tie:1,loss:0});
+  for(const rules of [{win:-1},{win:1.5},{win:21},{win:0,tie:1},{win:2,tie:3},{win:2,tie:0,loss:1},{win:1,tie:1,loss:1}])assert.throws(()=>pointsRules(rules));
 });

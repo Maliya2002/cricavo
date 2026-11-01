@@ -78,7 +78,14 @@ export function recordAdvancement(tournament, matches, {fixtureId, winner, reaso
   return {...tournament, revision:(tournament.revision || 0)+1, decisions:[...(tournament.decisions || []), {id:crypto.randomUUID(), fixtureId, winner, reason, recordedBy, at:new Date().toISOString(), signature:decisionSignature(match)}]};
 }
 
-export function createTournament({ name, teams, ballType, overs, ballsPerOver, players, format = 'league' }, uuid = () => crypto.randomUUID()) {
+export function pointsRules(raw = {}) {
+  const rules = {win:Number(raw.win ?? 2),tie:Number(raw.tie ?? 1),loss:Number(raw.loss ?? 0)};
+  if (Object.values(rules).some(v => !Number.isInteger(v) || v < 0 || v > 20)) throw Error('Points must be whole numbers from 0 to 20');
+  if (rules.win < rules.tie || rules.tie < rules.loss || rules.win === rules.loss) throw Error('Win points must exceed loss points; tie points must be between them');
+  return rules;
+}
+
+export function createTournament({ name, teams, ballType, overs, ballsPerOver, players, format = 'league', points }, uuid = () => crypto.randomUUID()) {
   name = String(name || '').trim();
   if (!name || name.length > 80) throw Error('Tournament name must be 1–80 characters');
   teams = teams.map(n => n.trim()).filter(Boolean);
@@ -89,10 +96,12 @@ export function createTournament({ name, teams, ballType, overs, ballsPerOver, p
   }
   if (!['softball','hardball'].includes(ballType)) throw Error('Choose a ball type');
   if (!['league','knockout'].includes(format)) throw Error('Choose league or knockout');
-  return { id: uuid(), schemaVersion: 1, name, teams, format, ballType, overs: +overs, ballsPerOver: +ballsPerOver, players: +players, createdAt: new Date().toISOString(), fixtures: format === 'knockout' ? knockoutBracket(teams,uuid) : roundRobin(teams).map(f => ({ ...f, id: uuid() })) };
+  const rules = pointsRules(points);
+  return { id: uuid(), schemaVersion: 1, name, teams, format, points:rules, ballType, overs: +overs, ballsPerOver: +ballsPerOver, players: +players, createdAt: new Date().toISOString(), fixtures: format === 'knockout' ? knockoutBracket(teams,uuid) : roundRobin(teams).map(f => ({ ...f, id: uuid() })) };
 }
 
 export function standings(tournament, matches) {
+  const points = pointsRules(tournament.points);
   const rows = new Map(tournament.teams.map(name => [name, { name, played: 0, won: 0, lost: 0, tied: 0, points: 0, runsFor:0, runsAgainst:0, oversFor:0, oversAgainst:0, nrr:null }]));
   const byId = new Map(matches.map(m => [m.id, m]));
   for (const fixture of tournament.fixtures) {
@@ -102,8 +111,8 @@ export function standings(tournament, matches) {
     if (!state.finished) continue;
     const a = rows.get(fixture.teamA), b = rows.get(fixture.teamB);
     a.played++; b.played++;
-    if (state.result.by === 'tie') { a.tied++; b.tied++; a.points++; b.points++; }
-    else { const winner = state.result.winner === 'A' ? a : b, loser = winner === a ? b : a; winner.won++; winner.points += 2; loser.lost++; }
+    if (state.result.by === 'tie') { a.tied++; b.tied++; a.points += points.tie; b.points += points.tie; }
+    else { const winner = state.result.winner === 'A' ? a : b, loser = winner === a ? b : a; winner.won++; winner.points += points.win; loser.lost++; loser.points += points.loss; }
     for (const innings of state.innings) {
       const batting = innings.team === 'A' ? a : b, bowling = batting === a ? b : a;
       // All-out uses the entitled quota. Otherwise use actual balls, never
