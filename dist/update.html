@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cricavo update check</title>
+<style>body{font:17px system-ui;max-width:640px;margin:40px auto;padding:20px;color:#18342b;background:#f5f7f6}button,a{font:inherit}button{padding:12px;background:#087e63;color:white;border:0;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:18px}p{line-height:1.6}</style></head>
+<body><h1>Cricavo update check</h1><p>This page checks for a new app version. Saved matches, tournaments and login data are not cleared.</p>
+<p>මෙම පිටුව අලුත් app version එකක් තිබේද බලයි. Save කළ තරග සහ tournaments මකා නොදමයි.</p>
+<button id="check">Check for update / Update පරීක්ෂා කරන්න</button><pre id="status" role="status" aria-live="polite">Ready to check.</pre>
+<p>If an update is waiting, finish any unsaved form, then close every Cricavo tab and installed Cricavo window in this browser, including this page. Reopen the same address. Reloading one tab may leave the old version active.</p>
+<p>Update එක waiting නම් save නොකළ form අවසන් කර, මේ browser එකේ සියලු Cricavo tabs සහ installed app windows වසා එම ලිපිනයෙන්ම නැවත විවෘත කරන්න.</p>
+<p><a href="./#tournaments">Return to tournaments</a></p>
+<script type="module">
+const button=document.querySelector('#check'),status=document.querySelector('#status');
+button.addEventListener('click',async()=>{
+ button.disabled=true;
+ try{
+  if(!('serviceWorker' in navigator))throw Error('Service workers are unavailable in this browser context.');
+  const registration=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});
+  const show=()=>{status.textContent=`Workspace: ${location.origin}\nActive worker: ${registration.active?.state||'none'}\nInstalling worker: ${registration.installing?.state||'none'}\nWaiting update: ${registration.waiting?'YES — close all Cricavo tabs/windows, then reopen':'none detected'}`;};
+  const watch=()=>{registration.installing?.addEventListener('statechange',show);show();};
+  registration.addEventListener('updatefound',watch);
+  watch();await registration.update();show();
+ }catch(error){status.textContent=`Update check failed: ${error.message}. Check your connection and try again.`;}
+ finally{button.disabled=false;}
+});
+</script></body></html>
