@@ -1,4 +1,4 @@
-import { createTournament, saveTournament, recordAdvancement, updateDraw } from './tournaments.js';
+import { createTournament, saveTournament, recordAdvancement, updateDraw, updateFixtureSchedule } from './tournaments.js';
 import { drawUI } from './draw-ui.js';
 import { tournamentBackup, validateTournamentBackup, restoreTournamentCopy, saveTournamentCopy, MAX_TOURNAMENT_BACKUP_BYTES } from './tournament-backups.js';
 import { listMatches, addMatchCopies } from './storage.js';
@@ -107,7 +107,22 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
       }catch(e){error.textContent=e.message;await refresh();}finally{saving=false;button.disabled=false;input.disabled=false;}
     };
   }
+  function bindSchedules() {
+    document.querySelectorAll('[data-schedule]').forEach(form=>{
+      const tournament=getTournaments().find(v=>v.id===form.dataset.schedule);
+      let saving=false;
+      form.onsubmit=async event=>{
+        event.preventDefault();if(saving)return;saving=true;
+        const button=form.querySelector('button');button.disabled=true;
+        try{
+          const updated=updateFixtureSchedule(tournament,form.dataset.fixture,Object.fromEntries(new FormData(form)));
+          await saveTournament(updated,tournament.revision||0);await refresh();redraw();toast(t('Schedule saved','කාලසටහන සුරැකුණා'));
+        }catch(error){form.querySelector('.form-error').textContent=error.message;}finally{saving=false;button.disabled=false;}
+      };
+    });
+  }
   function bind() {
+    bindSchedules();
     bindBackups();
     bindDraw();
     document.querySelectorAll('[data-advancement]').forEach(form => {

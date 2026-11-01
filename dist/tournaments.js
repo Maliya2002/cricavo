@@ -150,6 +150,24 @@ export function createTournament({ name, teams, ballType, overs, ballsPerOver, p
   return tournament;
 }
 
+export function fixtureSchedule(input={}) {
+  const scheduledStart=String(input.scheduledStart||'').trim(),timeZone=String(input.timeZone||'Asia/Colombo').trim(),venue=String(input.venue||'').trim();
+  if(venue.length>160)throw Error('Venue must be at most 160 characters');
+  if(scheduledStart){
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(scheduledStart))throw Error('Enter a valid date and time');
+    const date=new Date(scheduledStart+':00Z');
+    if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,16)!==scheduledStart)throw Error('Enter a valid calendar date and time');
+  }
+  try{new Intl.DateTimeFormat('en',{timeZone}).format(0);}catch{throw Error('Enter a valid time zone, for example Asia/Colombo');}
+  return {scheduledStart,timeZone,venue};
+}
+
+export function updateFixtureSchedule(tournament,fixtureId,input) {
+  if(!tournament.fixtures.some(f=>f.id===fixtureId))throw Error('Fixture not found');
+  const schedule=fixtureSchedule(input);
+  return {...tournament,revision:(tournament.revision||0)+1,fixtures:tournament.fixtures.map(f=>f.id===fixtureId?{...f,...schedule}:f)};
+}
+
 export function updateDraw(tournament,matches,input,uuid=()=>crypto.randomUUID()) {
   const fixtures=[...tournament.fixtures], index=input.id?fixtures.findIndex(f=>f.id===input.id):fixtures.length;
   if(index<0)throw Error('Fixture not found');
@@ -175,7 +193,7 @@ export function updateDraw(tournament,matches,input,uuid=()=>crypto.randomUUID()
     const stage=input.stage==='league'?'league':'playoff';
     const group=stage==='league'?(tournament.groups||[]).find(g=>g.id===input.group):null;
     if(stage==='league'&&(sourceA.type!=='team'||sourceB.type!=='team'||(tournament.groups?.length&&!group)||group&&(!group.teams.includes(sourceA.team)||!group.teams.includes(sourceB.team))))throw Error('League matches need two teams from the selected group');
-    const fixture={id:input.id||uuid(),round,label:String(input.label||'').trim().slice(0,80),stage,group:group?.id};
+    const fixture={...fixtureSchedule(fixtures[index]),id:input.id||uuid(),round,label:String(input.label||'').trim().slice(0,80),stage,group:group?.id};
     if(stage==='league'){fixture.teamA=sourceA.team;fixture.teamB=sourceB.team;}else{fixture.sourceA=sourceA;fixture.sourceB=sourceB;}
     fixtures[index]=fixture;
   }

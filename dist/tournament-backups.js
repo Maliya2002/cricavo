@@ -1,4 +1,4 @@
-import { createTournament } from './tournaments.js';
+import { createTournament, fixtureSchedule } from './tournaments.js';
 import { validateSnapshot } from './cloud-backups.js';
 
 export const MAX_TOURNAMENT_BACKUP_BYTES=25000000;
@@ -29,6 +29,7 @@ export function validateTournamentBackup(bundle) {
   requireValue(Array.isArray(tournament.fixtures)&&tournament.fixtures.length<=10000,'Invalid fixture list (maximum 10,000)');
   const fixtureMap=new Map();
   for(const fixture of tournament.fixtures){
+    fixtureSchedule(fixture);
     requireValue(idPattern.test(fixture.id)&&!fixtureMap.has(fixture.id),'Invalid or duplicate fixture identity');
     requireValue(Number.isSafeInteger(fixture.round)&&fixture.round>0,'Invalid fixture round');
     requireValue(fixture.label===undefined||typeof fixture.label==='string'&&fixture.label.length<=80,'Invalid fixture label');
