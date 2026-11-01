@@ -3,7 +3,7 @@
   "providers": {
     "email": false,
     "phone": false,
-    "google": false
+    "google": true
   },
   "supabasePublishableKey": "sb_publishable_U9EUSJTwh589JDC9LvHa5w_wu6GOkrs"
 }

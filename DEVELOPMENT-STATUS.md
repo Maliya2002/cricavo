@@ -30,3 +30,5 @@ Retain the existing project ID in `.openai/hosting.json`. Registration previousl
 
 Production Google/email/phone login requires provider selection/configuration. SMS costs, hosting budget and expected initial audience remain undecided. Device storage is not a substitute for server persistence or permissions.
 
+
+Google OAuth update: User configured the Google web client and Supabase provider. Public auth settings verified google=true on 1 November 2026. Enabled Google in client config. Email/phone remain disabled in the app. Redirect allowlist and end-to-end login still require verification; do not treat provider enablement as a successful login test.
