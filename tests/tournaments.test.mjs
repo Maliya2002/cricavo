@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {roundRobin,createTournament,standings,resolvedFixtures} from '../dist/tournaments.js';
+import {roundRobin,createTournament,standings,resolvedFixtures,recordAdvancement} from '../dist/tournaments.js';
 import {append,undo} from '../dist/engine.js';
 
 const values={name:'Sunday League',teams:['Kings','Lions','Stars'],overs:1,ballsPerOver:1,players:4,ballType:'softball'};
@@ -70,4 +70,23 @@ test('tied and undone results never silently advance a knockout team',()=>{
   const final=completed(fixtures.at(-1),6);
   fixtures=resolvedFixtures(tournament,[undo(first),other,final]);
   assert(fixtures.at(-1).conflict);assert(!fixtures.at(-1).winner);assert(!fixtures.at(-1).ready);
+});
+
+test('recorded tie decisions advance without changing scores, and can be revoked with history',()=>{
+  const tournament=createTournament({...values,format:'knockout',teams:['A','B']});
+  const f=tournament.fixtures[0], match=completed(f,4), before=JSON.stringify(match);
+  const input={fixtureId:f.id,winner:f.teamA,reason:'Organizer approved bowl-out result',recordedBy:'Match referee'};
+  const decided=recordAdvancement(tournament,[match],input);
+  assert.equal(resolvedFixtures(decided,[match])[0].winner,f.teamA);
+  assert.equal(JSON.stringify(match),before);
+  assert.equal(tournament.decisions,undefined);
+  const revoked=recordAdvancement(decided,[match],{...input,winner:null,reason:'Result under review'});
+  assert.equal(revoked.decisions.length,2);assert.equal(revoked.revision,2);
+  assert.equal(resolvedFixtures(revoked,[match])[0].winner,null);
+  const changed={...match,revision:match.revision+1};
+  assert.equal(resolvedFixtures(decided,[changed])[0].winner,null);
+  assert.throws(()=>recordAdvancement(tournament,[completed(f,6)],input),/tied/);
+  assert.throws(()=>recordAdvancement(tournament,[match],{...input,winner:'Other team'}),/Choose/);
+  assert.throws(()=>recordAdvancement(tournament,[match],{...input,reason:''}),/reason/);
+  assert.throws(()=>recordAdvancement(tournament,[match],{...input,recordedBy:''}),/recorder/);
 });

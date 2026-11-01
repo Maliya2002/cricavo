@@ -47,14 +47,35 @@ export function resolvedFixtures(tournament, matches) {
     const bye = !waiting && (!teamA || !teamB);
     const match = byId.get(fixture.id);
     const conflict = !!match && (waiting || match.settings.teamA !== teamA || match.settings.teamB !== teamB);
-    let winner = bye ? (teamA || teamB) : null, tied = false;
+    let winner = bye ? (teamA || teamB) : null, tied = false, decision = null;
     if (match && !conflict && !bye) {
       const state = replay(match);
-      if (state.finished) { tied = state.result.by === 'tie'; if (!tied) winner = state.result.winner === 'A' ? teamA : teamB; }
+      if (state.finished) {
+        tied = state.result.by === 'tie';
+        if (!tied) winner = state.result.winner === 'A' ? teamA : teamB;
+        else {
+          const latest = (tournament.decisions || []).filter(d => d.fixtureId === fixture.id).at(-1);
+          if (latest?.winner && latest.signature === decisionSignature(match) && [teamA,teamB].includes(latest.winner)) { decision = latest; winner = latest.winner; }
+        }
+      }
     }
-    results.set(fixture.id, {...fixture,teamA,teamB,waiting,bye,conflict,tied,winner,ready:!waiting&&!bye&&!conflict});
+    results.set(fixture.id, {...fixture,teamA,teamB,waiting,bye,conflict,tied,decision,winner,ready:!waiting&&!bye&&!conflict});
   }
   return [...results.values()];
+}
+
+function decisionSignature(match) { return JSON.stringify([match.revision,match.settings,match.events]); }
+
+export function recordAdvancement(tournament, matches, {fixtureId, winner, reason, recordedBy}) {
+  if (tournament.format !== 'knockout') throw Error('Advancement decisions require a knockout tournament');
+  const fixture = resolvedFixtures(tournament,matches).find(f => f.id === fixtureId);
+  const match = matches.find(m => m.id === fixtureId);
+  if (!fixture?.tied || fixture.conflict || !match) throw Error('Only a completed, tied match can have an advancement decision');
+  if (winner !== null && ![fixture.teamA,fixture.teamB].includes(winner)) throw Error('Choose one of the tied teams');
+  reason = String(reason || '').trim(); recordedBy = String(recordedBy || '').trim();
+  if (reason.length < 5 || reason.length > 300) throw Error('Enter a reason (5–300 characters)');
+  if (!recordedBy || recordedBy.length > 80) throw Error('Enter the decision recorder name (1–80 characters)');
+  return {...tournament, revision:(tournament.revision || 0)+1, decisions:[...(tournament.decisions || []), {id:crypto.randomUUID(), fixtureId, winner, reason, recordedBy, at:new Date().toISOString(), signature:decisionSignature(match)}]};
 }
 
 export function createTournament({ name, teams, ballType, overs, ballsPerOver, players, format = 'league' }, uuid = () => crypto.randomUUID()) {
@@ -106,12 +127,23 @@ export async function listTournaments() {
     request.onerror = () => reject(request.error);
   });
 }
-export async function saveTournament(tournament) {
+export async function saveTournament(tournament, expectedRevision = null) {
   const database = await db();
   return new Promise((resolve,reject) => {
     const transaction = database.transaction('tournaments','readwrite');
-    transaction.objectStore('tournaments').add(tournament);
+    const store = transaction.objectStore('tournaments');
+    let failure;
+    if (expectedRevision === null) store.add(tournament);
+    else {
+      const request = store.get(tournament.id);
+      request.onsuccess = () => {
+        if (!request.result || (request.result.revision || 0) !== expectedRevision) {
+          failure = Error('Tournament changed in another tab. Refresh before saving.'); transaction.abort(); return;
+        }
+        store.put(tournament);
+      };
+    }
     transaction.oncomplete = () => resolve(tournament);
-    transaction.onabort = transaction.onerror = () => reject(transaction.error || Error('Tournament saving failed'));
+    transaction.onabort = transaction.onerror = () => reject(failure || transaction.error || Error('Tournament saving failed'));
   });
 }
