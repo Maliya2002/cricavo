@@ -32,3 +32,5 @@ Production Google/email/phone login requires provider selection/configuration. S
 
 
 Google OAuth update: User configured the Google web client and Supabase provider. Public auth settings verified google=true on 1 November 2026. Enabled Google in client config. Email/phone remain disabled in the app. Redirect allowlist and end-to-end login still require verification; do not treat provider enablement as a successful login test.
+
+Cloud backups implementation (pending remote deployment): Added immutable account-private snapshots, manual upload and restore-as-new from Account. Migration 202611010002_match_backups.sql is NOT applied remotely. Browser use remains disabled. Apply migration before testing UI. Latest 50 snapshots listed; no automatic sync, active-scorer coordination, cloud deletion or storage quota management yet. User reported Google login success; organization creation outcome not confirmed.

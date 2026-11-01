@@ -1,4 +1,6 @@
 import { initializeCloud } from './auth.js';
+import { backupService } from './cloud-backups.js';
+import { listMatches, saveMatch } from './storage.js';
 
 export function createAccountUI({ modal, t, escape: esc, toast }) {
   let cloud = null, ready = false, failure = '', requestVersion = 0, visible = false, method = 'email';
@@ -30,6 +32,7 @@ export function createAccountUI({ modal, t, escape: esc, toast }) {
       const list = modal.querySelector('#org-list');
       if (result.error) { list.innerHTML = `<p class="form-error">${t('Organization database is not ready or unavailable. Apply the project migration and retry.', 'Organization database එක සූදානම් නැහැ හෝ ලබාගත නොහැක. Migration එක යොදා නැවත උත්සාහ කරන්න.')}</p>${btn(t('Retry', 'නැවත උත්සාහ කරන්න'), 'refresh')}`; }
       else list.innerHTML = result.data.length ? result.data.map(org => `<div class="notice">${esc(org.name)}</div>`).join('') : `<p class="muted">${t('Create your first club or tournament organization.', 'ඔබේ පළමු සමාජය හෝ තරග සංවිධානය සාදන්න.')}</p>`;
+      list.insertAdjacentHTML('afterend', btn(t('Cloud match backups', 'Cloud තරග පිටපත්'), 'backups'));
       return;
     }
     const pending = cloud.auth.pending;
@@ -43,6 +46,17 @@ export function createAccountUI({ modal, t, escape: esc, toast }) {
   }
 
   let submitting = false;
+  async function showBackups() {
+    const version = ++requestVersion;
+    paint(`<h3>${t('Cloud match backups', 'Cloud තරග පිටපත්')}</h3><p>${t('Loading…', 'පූරණය වෙමින්…')}</p>`);
+    try {
+      const [local, saved] = await Promise.all([listMatches(), backupService(cloud.client).list()]);
+      if (!visible || version !== requestVersion) return;
+      paint(`<h3>${t('Cloud match backups', 'Cloud තරග පිටපත්')}</h3><p class="muted">${t('Private to your account. Upload saves a snapshot; restore creates a new local match. This is not live sync. Latest 50 backups shown.', 'ඔබේ ගිණුමට පමණයි. Upload මඟින් මේ මොහොතේ පිටපතක් සුරකී. Restore නව local තරගයක් සාදයි. මෙය live sync නොවේ. අලුත්ම පිටපත් 50 පෙන්වයි.')}</p><h3>${t('On this device', 'මෙම උපාංගයේ')}</h3>${local.map(m => `<div class="notice">${esc(m.settings.teamA)} / ${esc(m.settings.teamB)} ${btn(t('Upload snapshot', 'පිටපත upload කරන්න'), 'upload:' + m.id)}</div>`).join('') || '<p>—</p>'}<h3>${t('Saved in cloud', 'Cloud හි සුරැකි')}</h3>${saved.map(b => `<div class="notice">${esc(new Date(b.created_at).toLocaleString())}<br><small>${esc(b.match_id)}</small>${btn(t('Restore as new match', 'නව තරගයක් ලෙස ලබාගන්න'), 'restore:' + b.id)}</div>`).join('') || '<p>—</p>'}<p id="account-error" class="form-error" role="alert"></p>${btn(t('Back to account', 'ගිණුම වෙත'), 'refresh')}`);
+    } catch (error) {
+      if (visible && version === requestVersion) paint(`<p class="form-error" role="alert">${esc(error.message)}</p>${btn(t('Retry backups', 'නැවත උත්සාහ කරන්න'), 'backups')}${btn(t('Back', 'ආපසු'), 'refresh')}`);
+    }
+  }
   async function run(operation) {
     if (submitting) return;
     submitting = true;
@@ -61,6 +75,20 @@ export function createAccountUI({ modal, t, escape: esc, toast }) {
     if (action === 'refresh') { show(); return; }
     if (action === 'change') { cloud.auth.clearPending(); show(); return; }
     run(async () => {
+      if (action === 'backups') await showBackups();
+      if (action.startsWith('upload:')) {
+        const match = (await listMatches()).find(m => m.id === action.slice(7));
+        if (!match) throw Error('Local match not found');
+        await backupService(cloud.client).upload(match);
+        toast(t('Cloud snapshot saved', 'Cloud පිටපත සුරැකුණා'));
+        if (visible) await showBackups();
+      }
+      if (action.startsWith('restore:')) {
+        const match = await backupService(cloud.client).download(action.slice(8));
+        await saveMatch(match, null);
+        location.href = '#score/' + match.id;
+        location.reload();
+      }
       if (action === 'google') await cloud.auth.google();
       if (action === 'signout') { await cloud.auth.signOut(); cloud.session = null; await show(); }
       if (action === 'resend') { const p = cloud.auth.pending; await cloud.auth.sendCode(p.method, p.identity); toast(t('Code sent', 'Code එක යැවුණා')); }
