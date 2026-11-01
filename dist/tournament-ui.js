@@ -1,6 +1,7 @@
 import { createTournament, saveTournament, recordAdvancement, updateDraw } from './tournaments.js';
 import { drawUI } from './draw-ui.js';
-import { listMatches } from './storage.js';
+import { tournamentBackup, validateTournamentBackup, restoreTournamentCopy, saveTournamentCopy, MAX_TOURNAMENT_BACKUP_BYTES } from './tournament-backups.js';
+import { listMatches, addMatchCopies } from './storage.js';
 
 export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toast, redraw }) {
   const field = (label,name,value,min,max) => `<label class="field">${label}<input name="${name}" type="number" required value="${value}" min="${min}" max="${max}"></label>`;
@@ -10,8 +11,8 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
   function render(id) {
     const tournaments = getTournaments(), tournament = tournaments.find(v => v.id === id);
     if (id && !tournament) return `<div class="notice">${t('Tournament not found on this device.', 'තරගාවලිය මෙම උපාංගයේ නැහැ.')} <a href="#tournaments">${t('Back','ආපසු')}</a></div>`;
-    if (tournament) return drawUI({t,esc,decisionForm}).render(tournament,getMatches());
-    return `<div class="page-head"><h1>${t('Tournaments','තරගාවලි')}</h1></div><p class="notice">${t('Tournaments are saved on this device. Choose team and group counts, assign groups, repeat league meetings, or build a manual draw. Team lists lock at creation.', 'තරගාවලි මෙම උපාංගයේ සුරැකේ. Team සහ group ගණන තෝරා teams බෙදන්න. League වට ගණන තෝරා හෝ manual draw එකක් සාදන්න. සෑදූ පසු team ලැයිස්තුව වෙනස් නොවේ.')}</p><div class="home-grid"><section class="stack">${tournaments.map(v=>`<article class="card"><h2>${esc(v.name)}</h2><p>${v.teams.length} ${t('teams','කණ්ඩායම්')} · ${v.fixtures.length} ${t('matches','තරග')} · ${esc(v.format)}</p><a class="btn" href="#tournaments/${v.id}">${t('Fixtures and points','තරග සහ ලකුණු')}</a></article>`).join('') || `<div class="card">${t('Create your first tournament.','ඔබේ පළමු තරගාවලිය සාදන්න.')}</div>`}</section><form id="tournament-form" class="card stack"><h2>${t('Create tournament','තරගාවලියක් සාදන්න')}</h2><label class="field">${t('Format','ආකෘතිය')}<select name="format"><option value="league">League</option><option value="knockout">Knockout</option><option value="groups">Group league + playoffs</option><option value="manual">Manual draw</option></select></label><label class="field">${t('Tournament name','තරගාවලියේ නම')}<input name="name" required maxlength="80"></label><label class="field">${t('Teams — one per line (2+)','කණ්ඩායම් — පේළියකට එක බැගින් (2+)')}<textarea name="teams" rows="6" required></textarea></label><section id="group-settings" class="stack" hidden><label class="field">${t('Number of groups','Group ගණන')}<input name="groupCount" type="number" min="1" step="1" value="2"></label><div id="group-assignments" class="stack"></div><label class="field">${t('Playoff template','Playoff ආකෘතිය')}<select name="playoffs"><option value="qualifier">2 groups: Qualifier 1 → Eliminator → Qualifier 2 → Final</option><option value="semis">2 groups: Cross semi-finals → Final</option><option value="none">Custom / add playoffs manually</option></select></label></section><label class="field" id="cycles-field">${t('League meetings per pair','Teams දෙකක් අතර තරග ගණන')}<input name="cycles" type="number" min="1" step="1" value="1"></label><label class="field">${t('Ball type','පන්දු වර්ගය')}<select name="ballType"><option value="softball">Softball</option><option value="hardball">Hardball</option></select></label><div class="fields">${field(t('Overs','ඕවර'),'overs',6,1,50)}${field(t('Balls per over','ඕවරයක පන්දු'),'ballsPerOver',6,1,12)}${field(t('Players per team','කණ්ඩායමක ක්‍රීඩකයන්'),'players',8,2,22)}</div><fieldset id="league-points" class="stack"><legend>${t('League points — locked at creation','League ලකුණු — සෑදූ පසු වෙනස් නොවේ')}</legend><div class="fields">${field(t('Win','ජය'),'winPoints',2,0,20)}${field(t('Tie','සම'),'tiePoints',1,0,20)}${field(t('Loss','පරාජය'),'lossPoints',0,0,20)}</div></fieldset><p class="small muted">${t('League: each pair plays the selected number of meetings. Knockout: winners advance, with byes for extra slots. Enter teams in seed order. Players and toss are entered at match setup.', 'League: සියලු කණ්ඩායම් එකිනෙකා සමඟ තරග කරයි. Knockout: ජයග්‍රාහකයා ඉදිරියට යයි. Teams seed අනුපිළිවෙළට ඇතුළත් කරන්න. Players සහ toss තරගය සකසන විට දෙන්න.')}</p><p class="form-error" role="alert"></p><button class="btn primary">${t('Create fixtures','තරග ලැයිස්තුව සාදන්න')}</button></form></div>`;
+    if (tournament) return `<section class="card stack"><button class="btn" data-export-tournament="${tournament.id}">${t('Download tournament backup','Tournament backup බාගන්න')}</button><p class="small muted">${t('Includes groups, draw, scores and advancement history. Keep this file private: it contains player and recorder names.','Groups, draw, ලකුණු සහ තීරණ ඉතිහාසය ඇතුළත් වේ. ක්‍රීඩක සහ සටහන්කරු නම් ඇති නිසා file එක පෞද්ගලිකව තබාගන්න.')}</p></section>` + drawUI({t,esc,decisionForm}).render(tournament,getMatches());
+    return `<div class="page-head"><h1>${t('Tournaments','තරගාවලි')}</h1></div><p class="notice">${t('Tournaments are saved on this device. Choose team and group counts, assign groups, repeat league meetings, or build a manual draw. Team lists lock at creation.', 'තරගාවලි මෙම උපාංගයේ සුරැකේ. Team සහ group ගණන තෝරා teams බෙදන්න. League වට ගණන තෝරා හෝ manual draw එකක් සාදන්න. සෑදූ පසු team ලැයිස්තුව වෙනස් නොවේ.')}</p>${restoreForm()}<div class="home-grid"><section class="stack">${tournaments.map(v=>`<article class="card"><h2>${esc(v.name)}</h2><p>${v.teams.length} ${t('teams','කණ්ඩායම්')} · ${v.fixtures.length} ${t('matches','තරග')} · ${esc(v.format)}</p><a class="btn" href="#tournaments/${v.id}">${t('Fixtures and points','තරග සහ ලකුණු')}</a></article>`).join('') || `<div class="card">${t('Create your first tournament.','ඔබේ පළමු තරගාවලිය සාදන්න.')}</div>`}</section><form id="tournament-form" class="card stack"><h2>${t('Create tournament','තරගාවලියක් සාදන්න')}</h2><label class="field">${t('Format','ආකෘතිය')}<select name="format"><option value="league">League</option><option value="knockout">Knockout</option><option value="groups">Group league + playoffs</option><option value="manual">Manual draw</option></select></label><label class="field">${t('Tournament name','තරගාවලියේ නම')}<input name="name" required maxlength="80"></label><label class="field">${t('Teams — one per line (2+)','කණ්ඩායම් — පේළියකට එක බැගින් (2+)')}<textarea name="teams" rows="6" required></textarea></label><section id="group-settings" class="stack" hidden><label class="field">${t('Number of groups','Group ගණන')}<input name="groupCount" type="number" min="1" step="1" value="2"></label><div id="group-assignments" class="stack"></div><label class="field">${t('Playoff template','Playoff ආකෘතිය')}<select name="playoffs"><option value="qualifier">2 groups: Qualifier 1 → Eliminator → Qualifier 2 → Final</option><option value="semis">2 groups: Cross semi-finals → Final</option><option value="none">Custom / add playoffs manually</option></select></label></section><label class="field" id="cycles-field">${t('League meetings per pair','Teams දෙකක් අතර තරග ගණන')}<input name="cycles" type="number" min="1" step="1" value="1"></label><label class="field">${t('Ball type','පන්දු වර්ගය')}<select name="ballType"><option value="softball">Softball</option><option value="hardball">Hardball</option></select></label><div class="fields">${field(t('Overs','ඕවර'),'overs',6,1,50)}${field(t('Balls per over','ඕවරයක පන්දු'),'ballsPerOver',6,1,12)}${field(t('Players per team','කණ්ඩායමක ක්‍රීඩකයන්'),'players',8,2,22)}</div><fieldset id="league-points" class="stack"><legend>${t('League points — locked at creation','League ලකුණු — සෑදූ පසු වෙනස් නොවේ')}</legend><div class="fields">${field(t('Win','ජය'),'winPoints',2,0,20)}${field(t('Tie','සම'),'tiePoints',1,0,20)}${field(t('Loss','පරාජය'),'lossPoints',0,0,20)}</div></fieldset><p class="small muted">${t('League: each pair plays the selected number of meetings. Knockout: winners advance, with byes for extra slots. Enter teams in seed order. Players and toss are entered at match setup.', 'League: සියලු කණ්ඩායම් එකිනෙකා සමඟ තරග කරයි. Knockout: ජයග්‍රාහකයා ඉදිරියට යයි. Teams seed අනුපිළිවෙළට ඇතුළත් කරන්න. Players සහ toss තරගය සකසන විට දෙන්න.')}</p><p class="form-error" role="alert"></p><button class="btn primary">${t('Create fixtures','තරග ලැයිස්තුව සාදන්න')}</button></form></div>`;
   }
   function updateGroups(form) {
     const grouped=form.elements.format.value==='groups';
@@ -68,7 +69,46 @@ export function tournamentUI({ t, esc, getTournaments, getMatches, refresh, toas
       };
     });
   }
+  function restoreForm() {
+    return `<form id="restore-tournament" class="card stack spacer"><h2>${t('Restore tournament backup','Tournament backup නැවත ලබාගන්න')}</h2><label class="field">${t('Choose JSON backup (up to 25 MB)','JSON backup තෝරන්න (25 MB දක්වා)')}<input type="file" name="backup" accept=".json,application/json" required></label><p>${t('Restores a separate copy, including its matches. Existing tournaments and scores stay unchanged. This is a file transfer, not live device sync.', 'තරග ඇතුළුව වෙනම පිටපතක් සාදයි. තිබෙන තරගාවලි සහ ලකුණු වෙනස් නොවේ. මෙය file හුවමාරුවකි; live device sync නොවේ.')}</p><div data-preview aria-live="polite"></div><p class="form-error" role="alert"></p><button class="btn primary" disabled>${t('Restore as a new copy','අලුත් පිටපතක් ලෙස ලබාගන්න')}</button></form>`;
+  }
+  function bindBackups() {
+    document.querySelectorAll('[data-export-tournament]').forEach(button=>{
+      button.onclick=async()=>{
+        button.disabled=true;
+        try {
+          await refresh();
+          const tournament=getTournaments().find(v=>v.id===button.dataset.exportTournament);
+          const bundle=tournamentBackup(tournament,getMatches());
+          const url=URL.createObjectURL(new Blob([JSON.stringify(bundle)],{type:'application/json'}));
+          const link=document.createElement('a');link.href=url;link.download=`cricavo-tournament-${tournament.id}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }catch(error){toast(error.message);}finally{button.disabled=false;}
+      };
+    });
+    const form=document.querySelector('#restore-tournament');if(!form)return;
+    let bundle=null,reading=0,saving=false;
+    const input=form.elements.backup,button=form.querySelector('button'),error=form.querySelector('.form-error'),preview=form.querySelector('[data-preview]');
+    input.onchange=async()=>{
+      const generation=++reading;bundle=null;button.disabled=true;error.textContent='';preview.textContent='';
+      try {
+        const file=input.files[0];if(!file)return;
+        if(file.size>MAX_TOURNAMENT_BACKUP_BYTES)throw Error('Tournament backup exceeds 25 MB');
+        const parsed=validateTournamentBackup(JSON.parse(await file.text()));if(generation!==reading)return;
+        bundle=parsed;preview.textContent=`${parsed.tournament.name} · ${parsed.tournament.teams.length} teams · ${parsed.tournament.groups?.length||0} groups · ${parsed.tournament.fixtures.length} fixtures · ${parsed.matches.length} saved matches`;
+        button.disabled=false;
+      }catch(e){if(generation===reading)error.textContent=e.message;}
+    };
+    form.onsubmit=async event=>{
+      event.preventDefault();if(!bundle||saving)return;saving=true;button.disabled=true;input.disabled=true;error.textContent='';
+      try {
+        const copy=restoreTournamentCopy(bundle);
+        await saveTournamentCopy(copy,{saveMatches:addMatchCopies,saveTournament});
+        await refresh();location.hash='#tournaments/'+copy.tournament.id;toast(t('Tournament copy restored','තරගාවලියේ පිටපත ලබාගත්තා'));
+      }catch(e){error.textContent=e.message;await refresh();}finally{saving=false;button.disabled=false;input.disabled=false;}
+    };
+  }
   function bind() {
+    bindBackups();
     bindDraw();
     document.querySelectorAll('[data-advancement]').forEach(form => {
       let saving = false;
