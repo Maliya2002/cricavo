@@ -1,5 +1,9 @@
 {
-  "supabaseUrl": "",
-  "supabasePublishableKey": "",
-  "providers": { "google": false, "email": false, "phone": false }
+  "supabaseUrl": "https://iltvriolefvvfhinxagf.supabase.co",
+  "providers": {
+    "email": false,
+    "phone": false,
+    "google": false
+  },
+  "supabasePublishableKey": "sb_publishable_U9EUSJTwh589JDC9LvHa5w_wu6GOkrs"
 }

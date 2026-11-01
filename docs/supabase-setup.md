@@ -2,9 +2,9 @@
 
 ## Current state
 
-Version 0.2 contains Google OAuth (PKCE), email OTP, phone OTP, device-local sign-out and organization creation/listing. The provider configuration is deliberately blank and disabled until a real project is provisioned. This is not a completed production login deployment. Local scoring remains independent of the account.
+Version 0.2 contains Google OAuth (PKCE), email OTP, phone OTP, device-local sign-out and organization creation/listing. Public client configuration now points to project iltvriolefvvfhinxagf (Mumbai). App login providers remain disabled until their delivery/configuration is complete. This is not a completed production login deployment. Local scoring remains independent of the account.
 
-The user authorized creating a new project for their Supabase account. The integration reports installed, but project/organization tool calls currently return Unknown tool. No project or paid service was created. Confirm the intended organization from the account before creation; do not infer an organization from an email address. Obtain explicit agreement before any nonzero project or SMS cost.
+The Cricavo Free organization and project are now provisioned. The organization migration was applied once through the dashboard SQL editor, and both tables report RLS enabled. The public auth settings endpoint responded successfully. Email is enabled on the server, but the default template sends a magic link; this app expects an OTP. The dashboard requires custom SMTP or Pro to edit the template. The user requested SMTP setup but has no sender domain. No paid upgrade, SMTP service, Google OAuth setup, SMS delivery, or email verification has been completed.
 
 ## Provision and connect
 
@@ -31,7 +31,7 @@ The user authorized creating a new project for their Supabase account. The integ
 
 Automated tests exercise auth request wiring and failures with mocks, plus actual SQL migrations/RLS against an in-memory PostgreSQL engine (PGlite) with a minimal Supabase auth shim. They cover cross-tenant reads, direct writes, anonymous calls, empty identities and organization limits. These are not live-provider integration tests.
 
-Before production, verify real Google redirects, email/SMS delivery and expiry, account changes, logout, refresh, RLS with two real users, offline/reconnect and iOS/Android behavior. Do not send verification messages until the user initiates sign-in. Browser QA for this milestone has not run because local browser control is disabled.
+Before production, verify real Google redirects, email/SMS delivery and expiry, account changes, logout, refresh, RLS with two real users, offline/reconnect and iOS/Android behavior. Do not send verification messages until the user initiates sign-in. Browser control has recovered; full app login QA remains pending provider configuration.
 
 ## Sources
 
@@ -40,3 +40,4 @@ Before production, verify real Google redirects, email/SMS delivery and expiry, 
 - [OTP verification](https://supabase.com/docs/reference/javascript/auth-verifyotp)
 - [PKCE flow](https://supabase.com/docs/guides/auth/sessions/pkce-flow)
 - [Row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+

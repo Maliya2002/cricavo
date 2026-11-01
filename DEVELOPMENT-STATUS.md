@@ -4,7 +4,7 @@ Updated: 1 November 2026 (Asia/Colombo).
 
 ## Delivered locally
 
-Milestone 0.2 adds Supabase auth adapters and account UI, an organization migration and tests. The project is not provisioned: the user clarified they need a new Supabase project. The integration is installed but project/organization calls return Unknown tool. No cloud migration, provider enablement, email or SMS delivery has taken place. See `docs/supabase-setup.md`.
+Milestone 0.2 includes auth adapters, account UI, organization schema and tests. On 1 November 2026, created the separate Cricavo Free organization (alodrwfgvaadivfufzms). The user created project iltvriolefvvfhinxagf in Mumbai. Project reports Healthy. Public URL/publishable key are configured in dist/config.json. Applied 202611010001_organizations.sql once via dashboard SQL editor after verifying no Cricavo tables existed; verified both tables have RLS enabled. Remote auth settings respond successfully: email enabled server-side; Google and phone disabled. All app provider flags remain disabled: Free-plan email template editing requires custom SMTP, and the user has no sender domain or SMTP service. No verification messages sent. See docs/supabase-setup.md.
 
 Current validation: 24 tests pass (15 scoring, 8 auth and one PostgreSQL policy suite). Browser bundle build and syntax checks pass. Browser QA and live-provider tests for 0.2 remain pending.
 
@@ -29,3 +29,4 @@ Retain the existing project ID in `.openai/hosting.json`. Registration previousl
 3. Implement remaining Release 1 capabilities in the approved requirements: server accounts/organizations, authenticated offline sync, public score sharing, tournaments, player identities and advanced match workflows.
 
 Production Google/email/phone login requires provider selection/configuration. SMS costs, hosting budget and expected initial audience remain undecided. Device storage is not a substitute for server persistence or permissions.
+
