@@ -63,7 +63,7 @@ test('backup preview and restore keep original scores and create a linked new to
   const original=JSON.stringify(match),file=JSON.stringify(tournamentBackup(tournament,[match]));
   const h=harness(t);h.render();const form=document.querySelector('#restore-tournament'),input=form.elements.backup;
   Object.defineProperty(input,'files',{configurable:true,value:[{size:file.length,text:async()=>file}]});await input.onchange();
-  assert.equal(form.querySelector('.form-error').textContent,'');assert(form.querySelector('[data-preview]').textContent.includes('1 saved matches'));assert(!form.querySelector('button').disabled);
+  assert.equal(form.querySelector('.form-error').textContent,'');assert(form.querySelector('[data-preview]').textContent.includes('1 saved match'));assert(!form.querySelector('button').disabled);
   await h.submit(form);assert.equal(form.querySelector('.form-error').textContent,'');
   const restored=(await listTournaments()).find(v=>v.restoredFrom===tournament.id);assert(restored);assert.notEqual(restored.id,tournament.id);
   const matches=await listMatches(),copy=matches.find(m=>m.tournamentId===restored.id);assert(copy);assert.notEqual(copy.id,match.id);assert(restored.fixtures.some(f=>f.id===copy.id));assert.equal(replay(copy).current.total,4);assert.equal(JSON.stringify(matches.find(m=>m.id===match.id)),original);
